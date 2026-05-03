@@ -1,17 +1,19 @@
-from itertools import count
-import threading
-
 from PyQt5 import QtWidgets
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QDialog
 from uirobust import Ui_RobustDialog
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QTimer, Qt
 from workerThread import QWorker
+from collections import deque
 
 class RobustConstruct(Ui_RobustDialog):
 
     def __init__(self):
         super().__init__()
+        self.uiQueue = deque()
+        self.addTimer = QTimer()
+        self.addTimer.setInterval(50)
+        self.addTimer.timeout.connect(self.processNextUiUpdate)
 
     def setupUi(self, RobustDialog:QDialog):
         super().setupUi(RobustDialog)
@@ -39,22 +41,26 @@ class RobustConstruct(Ui_RobustDialog):
         self.worker.driverManager.finished.connect(self.QThreadFinished)
         self.worker.driverManager.status.connect(self.handleQThreadStatus)
         self.closeAllButton.clicked.connect(self.closeAllDrivers)
-        
+
     def createDrivers(self):
         self.startButton.setDisabled(True)
         self.worker.run(self.numberOfDrivers)
 
     def handleQThreadStatus(self,event):
         if event['type'] == "driverCreating":
-            self.statusArea.append(event['msg'] + str(self.nextDriverNumber))
-            self.nextDriverNumber += 1
+            self.uiQueue.append(("status", event))  
+            if not self.addTimer.isActive():
+                self.addTimer.start()
 
         if event['type'] == "driverReady":
             self.worker.driverManager.drivers[event['uuid']]['number'] = self.nextReadyDriverNumber
             self.worker.driverManager.drivers[event['uuid']]['driver'].execute_script("document.title = 'Driver " + str(self.nextReadyDriverNumber) + "'")
-            self.statusArea.append(event['msg'] + str(self.nextReadyDriverNumber) + " Ready")
-            self.createDriverInstances(self.nextReadyDriverNumber,event['uuid'])
+            onDriverReadyInfo = {"number":self.nextReadyDriverNumber,"uuid":event['uuid']}
+            self.uiQueue.append(("createInstance", onDriverReadyInfo))
+            if not self.addTimer.isActive():
+                self.addTimer.start()
             self.nextReadyDriverNumber += 1
+            self.updateCounter()
 
     def QThreadFinished(self,event):
         self.startButton.setDisabled(False)
@@ -65,15 +71,38 @@ class RobustConstruct(Ui_RobustDialog):
         self.worker.driverManager.drivers[uuid]['threadQueue'].put("close")
         driverInstance = self.scrollAreaWidgetContents.findChild(QtWidgets.QWidget,"driverInstance"+str(uuid))
         driverInstance.deleteLater()
-        self.statusArea.append("Driver " + str(driverNumber) + " Closed")
+        self.uiQueue.append(("status", {"msg": "Driver " + str(driverNumber) + " Closed"}))
+        if not self.addTimer.isActive():
+            self.addTimer.start()
         self.worker.driverManager.drivers[uuid]['dropped'] = True
+        self.updateCounter()
 
     def closeAllDrivers(self):
         for uuid,driver in self.worker.driverManager.drivers.items():
             if not driver['dropped']:
                 self.closeDriverInstance(uuid)
+        self.updateCounter()
+        self.statusArea.clear()
+        self.startButton.setDisabled(False)
 
-    def createDriverInstances(self,number,uuid):
+    def updateCounter(self):
+        currentActiveDrivers = len(self.worker.driverManager.drivers) - sum(1 for driver in self.worker.driverManager.drivers.values() if driver['dropped'])
+        self.countNumber.setText(str(currentActiveDrivers))
+
+    def processNextUiUpdate(self):
+        if self.uiQueue:
+            updateType, event = self.uiQueue.popleft()
+            if updateType == "status":
+                self.statusArea.append(event['msg'] + str(self.nextDriverNumber))
+                self.nextDriverNumber += 1
+            elif updateType == "createInstance":
+                self.createDriverInstances(event)
+        else:
+            self.addTimer.stop()
+
+    def createDriverInstances(self,driverInfo):
+        number = driverInfo["number"]
+        uuid = driverInfo["uuid"]
         driverInstance = QtWidgets.QWidget(self.scrollAreaWidgetContents)
         driverInstance.setMaximumSize(QtCore.QSize(16777215, 50))
         driverInstance.setObjectName("driverInstance"+str(uuid))

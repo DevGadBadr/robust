@@ -4,14 +4,14 @@ from PyQt5.QtCore import QObject, pyqtSignal
 import queue
 from uuid import uuid4
 
-class oneDriver:
+class oneDriverType:
     driver = None
     number: int = 0
     dropped: bool = False
     threadQueue: queue.Queue = None
+    uuid: str = None
 
 class DriverManager(QObject):
-
     drivers:dict = {}
     threads:list = []
     status = pyqtSignal(dict)
@@ -25,12 +25,11 @@ class DriverManager(QObject):
         # options.add_argument("--headless")
         driver = webdriver.Chrome(options=options)
         threadQueue = queue.Queue()
-        oneDriver:oneDriver = {"driver":driver,"dropped":False,"threadQueue":threadQueue}
+        oneDriver: oneDriverType = {"driver":driver,"dropped":False,"threadQueue":threadQueue,"uuid":driverUUID}
         self.drivers[driverUUID] = oneDriver
         self.status.emit({"msg":"Driver ","type":"driverReady","uuid":driverUUID})
         if len(self.drivers) == self.counter:
             self.finished.emit({"msg":"All Drivers Ready","type":"allDriversReady"})
-
         while True:
             task = threadQueue.get()
             try:

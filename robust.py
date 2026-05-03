@@ -1,20 +1,19 @@
 from robustConstruct import RobustConstruct
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtWidgets import QDialog
-
+import sys
 
 class RobustDialog(RobustConstruct):
-    def __init__(self):
-        super().__init__()
 
-    def setupUi(self, RobustDialog):
-        super().setupUi(RobustDialog)
+    def setupUi(self, dialog:QDialog):
+        super().setupUi(dialog)
 
-    
 if __name__ == "__main__":
-    app = QApplication([])
+    if not 'fusion' in sys.argv:
+        QApplication.setStyle('Fusion')
+    app = QApplication(sys.argv)
     mainDialog = QDialog()
     applicationClass = RobustDialog()
     applicationClass.setupUi(mainDialog)
     mainDialog.show()
-    app.exec()
+    sys.exit(app.exec())

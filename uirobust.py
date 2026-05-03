@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_RobustDialog(object):
     def setupUi(self, RobustDialog):
         RobustDialog.setObjectName("RobustDialog")
-        RobustDialog.resize(548, 670)
+        RobustDialog.resize(548, 669)
         RobustDialog.setWindowOpacity(1.0)
         self.verticalLayout = QtWidgets.QVBoxLayout(RobustDialog)
         self.verticalLayout.setObjectName("verticalLayout")
@@ -34,6 +34,7 @@ class Ui_RobustDialog(object):
         self.slider = QtWidgets.QSlider(RobustDialog)
         self.slider.setMinimum(1)
         self.slider.setMaximum(20)
+        self.slider.setPageStep(1)
         self.slider.setSliderPosition(1)
         self.slider.setOrientation(QtCore.Qt.Horizontal)
         self.slider.setObjectName("slider")
@@ -82,7 +83,7 @@ class Ui_RobustDialog(object):
         self.scrollArea.setWidgetResizable(True)
         self.scrollArea.setObjectName("scrollArea")
         self.scrollAreaWidgetContents = QtWidgets.QWidget()
-        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 522, 236))
+        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 522, 210))
         self.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
         self.scrollAreaLayout = QtWidgets.QVBoxLayout(self.scrollAreaWidgetContents)
         self.scrollAreaLayout.setObjectName("scrollAreaLayout")
@@ -94,6 +95,16 @@ class Ui_RobustDialog(object):
         self.scrollArea.setWidget(self.scrollAreaWidgetContents)
         self.driversLayout.addWidget(self.scrollArea)
         self.verticalLayout.addLayout(self.driversLayout)
+        self.horizontalLayout_2 = QtWidgets.QHBoxLayout()
+        self.horizontalLayout_2.setObjectName("horizontalLayout_2")
+        self.labelCount = QtWidgets.QLabel(RobustDialog)
+        self.labelCount.setMaximumSize(QtCore.QSize(40, 16777215))
+        self.labelCount.setObjectName("labelCount")
+        self.horizontalLayout_2.addWidget(self.labelCount)
+        self.countNumber = QtWidgets.QLabel(RobustDialog)
+        self.countNumber.setObjectName("countNumber")
+        self.horizontalLayout_2.addWidget(self.countNumber)
+        self.verticalLayout.addLayout(self.horizontalLayout_2)
         spacerItem5 = QtWidgets.QSpacerItem(20, 10, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Fixed)
         self.verticalLayout.addItem(spacerItem5)
         self.foot = QtWidgets.QVBoxLayout()
@@ -117,6 +128,7 @@ class Ui_RobustDialog(object):
 
         self.retranslateUi(RobustDialog)
         self.clearStatusButtton.clicked.connect(self.statusArea.clear) # type: ignore
+        self.slider.valueChanged['int'].connect(self.driverCountLabel.setNum) # type: ignore
         QtCore.QMetaObject.connectSlotsByName(RobustDialog)
 
     def retranslateUi(self, RobustDialog):
@@ -126,4 +138,6 @@ class Ui_RobustDialog(object):
         self.driverCountLabel.setText(_translate("RobustDialog", "<html><head/><body><p>1</p></body></html>"))
         self.clearStatusButtton.setText(_translate("RobustDialog", "Clear"))
         self.startButton.setText(_translate("RobustDialog", "Create"))
+        self.labelCount.setText(_translate("RobustDialog", "Count:"))
+        self.countNumber.setText(_translate("RobustDialog", "0"))
         self.closeAllButton.setText(_translate("RobustDialog", "Close All"))
