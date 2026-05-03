@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>548</width>
+    <width>547</width>
     <height>669</height>
    </rect>
   </property>
@@ -84,7 +84,7 @@
            </property>
            <property name="sizeHint" stdset="0">
             <size>
-             <width>40</width>
+             <width>20</width>
              <height>20</height>
             </size>
            </property>
@@ -92,6 +92,12 @@
          </item>
          <item>
           <widget class="QLabel" name="driverCountLabel">
+           <property name="minimumSize">
+            <size>
+             <width>30</width>
+             <height>0</height>
+            </size>
+           </property>
            <property name="styleSheet">
             <string notr="true">font-weight:bold;</string>
            </property>
@@ -110,7 +116,7 @@
            </property>
            <property name="sizeHint" stdset="0">
             <size>
-             <width>40</width>
+             <width>20</width>
              <height>20</height>
             </size>
            </property>
@@ -119,6 +125,98 @@
         </layout>
        </item>
       </layout>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_3">
+     <property name="spacing">
+      <number>5</number>
+     </property>
+     <property name="leftMargin">
+      <number>5</number>
+     </property>
+     <property name="topMargin">
+      <number>5</number>
+     </property>
+     <property name="rightMargin">
+      <number>5</number>
+     </property>
+     <property name="bottomMargin">
+      <number>5</number>
+     </property>
+     <item>
+      <widget class="QLabel" name="defaultUrlLabel">
+       <property name="maximumSize">
+        <size>
+         <width>80</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>Default URL</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="mainDefaultBox">
+       <property name="minimumSize">
+        <size>
+         <width>100</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="editable">
+        <bool>false</bool>
+       </property>
+       <property name="currentText">
+        <string>Google</string>
+       </property>
+       <item>
+        <property name="text">
+         <string>Google</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>YouTube</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Facebook</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Instagram</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>X</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>TikTok</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="customCheckBox">
+       <property name="text">
+        <string>Custom</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="customUrlBox">
+       <property name="placeholderText">
+        <string/>
+       </property>
+      </widget>
      </item>
     </layout>
    </item>
@@ -196,13 +294,132 @@ max-width:300px;</string>
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>522</width>
-          <height>210</height>
+          <width>521</width>
+          <height>171</height>
          </rect>
         </property>
         <layout class="QVBoxLayout" name="scrollAreaLayout">
          <item>
-          <layout class="QVBoxLayout" name="instancesContainerLayout"/>
+          <layout class="QVBoxLayout" name="instancesContainerLayout">
+           <item>
+            <widget class="QWidget" name="driverInstancePlaceHolder" native="true">
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>50</height>
+              </size>
+             </property>
+             <layout class="QHBoxLayout" name="instancesLayout">
+              <property name="spacing">
+               <number>5</number>
+              </property>
+              <property name="leftMargin">
+               <number>5</number>
+              </property>
+              <property name="topMargin">
+               <number>5</number>
+              </property>
+              <property name="rightMargin">
+               <number>5</number>
+              </property>
+              <property name="bottomMargin">
+               <number>5</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="driverName">
+                <property name="text">
+                 <string>Driver 1</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QComboBox" name="driverDefaultUrl">
+                <property name="maximumSize">
+                 <size>
+                  <width>16777215</width>
+                  <height>30</height>
+                 </size>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="horizontalSpacer_3">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeType">
+                 <enum>QSizePolicy::Fixed</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>10</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="driverControl">
+                <property name="maximumSize">
+                 <size>
+                  <width>70</width>
+                  <height>30</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Go</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="horizontalSpacer_2">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeType">
+                 <enum>QSizePolicy::Fixed</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>10</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="closeDriver">
+                <property name="maximumSize">
+                 <size>
+                  <width>100</width>
+                  <height>30</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Close</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="spacerItem">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeType">
+                 <enum>QSizePolicy::Fixed</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>10</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </widget>
+           </item>
+          </layout>
          </item>
          <item>
           <spacer name="instancesVerticalSpacer">
@@ -277,6 +494,29 @@ max-width:300px;</string>
      <item>
       <layout class="QHBoxLayout" name="horizontalLayout">
        <item>
+        <widget class="QPushButton" name="executeAllButton">
+         <property name="minimumSize">
+          <size>
+           <width>150</width>
+           <height>31</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>300</width>
+           <height>166666</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">height:30px;
+</string>
+         </property>
+         <property name="text">
+          <string>Execute All</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="horizontalSpacer">
          <property name="orientation">
           <enum>Qt::Horizontal</enum>
@@ -286,7 +526,7 @@ max-width:300px;</string>
          </property>
          <property name="sizeHint" stdset="0">
           <size>
-           <width>300</width>
+           <width>200</width>
            <height>20</height>
           </size>
          </property>
@@ -340,8 +580,8 @@ max-width:300px;</string>
    <slot>clear()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>92</x>
-     <y>116</y>
+     <x>104</x>
+     <y>164</y>
     </hint>
     <hint type="destinationlabel">
      <x>133</x>

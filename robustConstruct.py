@@ -1,24 +1,27 @@
 from PyQt5 import QtWidgets
-from PyQt5 import QtCore
+from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QDialog
 from uirobust import Ui_RobustDialog
 from PyQt5.QtCore import QTimer, Qt
 from workerThread import QWorker
 from collections import deque
+from scrapeJobs import scrapeUrl, app_urls
 
 class RobustConstruct(Ui_RobustDialog):
 
     def __init__(self):
         super().__init__()
-        self.uiQueue = deque()
-        self.addTimer = QTimer()
-        self.addTimer.setInterval(50)
-        self.addTimer.timeout.connect(self.processNextUiUpdate)
+        self.uiUpdateQueue = deque()
+        self.uiUpdateTimer = QTimer()
+        self.uiUpdateTimer.setInterval(50)
+        self.uiUpdateTimer.timeout.connect(self.processNextUiUpdate)
 
     def setupUi(self, RobustDialog:QDialog):
         super().setupUi(RobustDialog)
         RobustDialog.setWindowFlags(RobustDialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         RobustDialog.setWindowFlags(RobustDialog.windowFlags() | Qt.WindowMinimizeButtonHint)
+        self.driverInstancePlaceHolder.deleteLater()
+        self.customUrlBox.setDisabled(True)
         self.initiateVariables()
         self.connectActions()
         self.initiateWorker()
@@ -31,6 +34,16 @@ class RobustConstruct(Ui_RobustDialog):
     def connectActions(self):
         self.slider.valueChanged.connect(self.castSliderChange)
         self.startButton.clicked.connect(self.createDrivers)
+        self.customCheckBox.stateChanged.connect(self.handleCustomCheck)
+        self.executeAllButton.clicked.connect(self.executeAllDrivers)
+        
+    def handleCustomCheck(self,state):
+        if state:
+            self.customUrlBox.setDisabled(False)
+            self.mainDefaultBox.setDisabled(True)
+        else:
+            self.customUrlBox.setDisabled(True)
+            self.mainDefaultBox.setDisabled(False)
 
     def castSliderChange(self,value):
         self.driverCountLabel.setText(str(value))
@@ -48,17 +61,16 @@ class RobustConstruct(Ui_RobustDialog):
 
     def handleQThreadStatus(self,event):
         if event['type'] == "driverCreating":
-            self.uiQueue.append(("status", event))  
-            if not self.addTimer.isActive():
-                self.addTimer.start()
+            self.postToUI("status", {"msg": "Creating Driver " + str(self.nextDriverNumber)})
+            self.nextDriverNumber += 1
 
         if event['type'] == "driverReady":
             self.worker.driverManager.drivers[event['uuid']]['number'] = self.nextReadyDriverNumber
-            self.worker.driverManager.drivers[event['uuid']]['driver'].execute_script("document.title = 'Driver " + str(self.nextReadyDriverNumber) + "'")
+            self.worker.driverManager.drivers[event['uuid']]['currentDefaultUrl'] = app_urls[self.mainDefaultBox.currentText()]
+            self.worker.driverManager.drivers[event['uuid']]['threadQueue'].put(("assignNumber",[self.nextReadyDriverNumber],{}))
             onDriverReadyInfo = {"number":self.nextReadyDriverNumber,"uuid":event['uuid']}
-            self.uiQueue.append(("createInstance", onDriverReadyInfo))
-            if not self.addTimer.isActive():
-                self.addTimer.start()
+            self.postToUI("status", {"msg": "Driver Ready " + str(self.nextReadyDriverNumber)})
+            self.postToUI("createInstance", onDriverReadyInfo)
             self.nextReadyDriverNumber += 1
             self.updateCounter()
 
@@ -71,9 +83,7 @@ class RobustConstruct(Ui_RobustDialog):
         self.worker.driverManager.drivers[uuid]['threadQueue'].put("close")
         driverInstance = self.scrollAreaWidgetContents.findChild(QtWidgets.QWidget,"driverInstance"+str(uuid))
         driverInstance.deleteLater()
-        self.uiQueue.append(("status", {"msg": "Driver " + str(driverNumber) + " Closed"}))
-        if not self.addTimer.isActive():
-            self.addTimer.start()
+        self.postToUI("status", {"msg": "Driver " + str(driverNumber) + " Closed"})
         self.worker.driverManager.drivers[uuid]['dropped'] = True
         self.updateCounter()
 
@@ -81,24 +91,34 @@ class RobustConstruct(Ui_RobustDialog):
         for uuid,driver in self.worker.driverManager.drivers.items():
             if not driver['dropped']:
                 self.closeDriverInstance(uuid)
-        self.updateCounter()
-        self.statusArea.clear()
+        self.postToUI("cleanStatus", self.statusArea.clear)
         self.startButton.setDisabled(False)
 
     def updateCounter(self):
         currentActiveDrivers = len(self.worker.driverManager.drivers) - sum(1 for driver in self.worker.driverManager.drivers.values() if driver['dropped'])
         self.countNumber.setText(str(currentActiveDrivers))
 
+    def postToUI(self, taskType, data):
+        self.uiUpdateQueue.append((taskType, data))
+        if not self.uiUpdateTimer.isActive():
+            self.uiUpdateTimer.start()
+
     def processNextUiUpdate(self):
-        if self.uiQueue:
-            updateType, event = self.uiQueue.popleft()
+        if self.uiUpdateQueue:
+            updateType, event = self.uiUpdateQueue.popleft()
             if updateType == "status":
-                self.statusArea.append(event['msg'] + str(self.nextDriverNumber))
-                self.nextDriverNumber += 1
+                self.statusArea.append(event['msg'])
             elif updateType == "createInstance":
                 self.createDriverInstances(event)
+            elif updateType == "cleanStatus":
+                event()
         else:
-            self.addTimer.stop()
+            self.uiUpdateTimer.stop()
+
+    def executeAllDrivers(self):
+        for uuid,driver in self.worker.driverManager.drivers.items():
+            if not driver['dropped']:
+                driver['threadQueue'].put((scrapeUrl,[],{"url":driver['currentDefaultUrl']}))
 
     def createDriverInstances(self,driverInfo):
         number = driverInfo["number"]
@@ -114,15 +134,29 @@ class RobustConstruct(Ui_RobustDialog):
         driverName.setObjectName("driverName"+str(uuid))
         driverName.setText("Driver " + str(number))
         instanceLayout.addWidget(driverName)
+        driverDefaultUrl = QtWidgets.QComboBox(driverInstance)
+        driverDefaultUrl.setMaximumSize(QtCore.QSize(16777215, 30))
+        driverDefaultUrl.setObjectName("driverDefaultUrl"+str(uuid))
+        for key,value in app_urls.items():
+            driverDefaultUrl.addItem(key)
+            driverDefaultUrl.setItemData(driverDefaultUrl.count()-1, value)
+        driverDefaultUrl.currentTextChanged.connect(lambda: self.worker.driverManager.drivers[uuid]['threadQueue'].put(("updateUrl",[],{"url":driverDefaultUrl.currentData(),"uuid":uuid})))
+        driverDefaultUrl.setCurrentText(self.mainDefaultBox.currentText())
+        instanceLayout.addWidget(driverDefaultUrl)
+        spacerItem4 = QtWidgets.QSpacerItem(10, 20, QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Minimum)
+        instanceLayout.addItem(spacerItem4)
+        driverControl = QtWidgets.QPushButton(driverInstance)
+        driverControl.setMaximumSize(QtCore.QSize(70, 30))
+        driverControl.setText("Go")
+        driverControl.setObjectName("driverControl"+str(uuid))
+        driverControl.clicked.connect(lambda:self.worker.driverManager.drivers[uuid]['threadQueue'].put((scrapeUrl,[],{"url":driverDefaultUrl.currentData()})))
+        instanceLayout.addWidget(driverControl)
+        spacerItem1 = QtWidgets.QSpacerItem(10, 20, QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Minimum)
+        instanceLayout.addItem(spacerItem1)
         closeDriver = QtWidgets.QPushButton(driverInstance)
-        closeDriver.setMaximumSize(QtCore.QSize(100, 16777215))
+        closeDriver.setMaximumSize(QtCore.QSize(100, 30))
         closeDriver.setObjectName("closeDriver"+str(uuid))
         closeDriver.setText("Close")
         closeDriver.clicked.connect(lambda:self.closeDriverInstance(uuid))
         instanceLayout.addWidget(closeDriver)
-        spacerItem4 = QtWidgets.QSpacerItem(20, 20, QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Minimum)
-        instanceLayout.addItem(spacerItem4)
         self.instancesContainerLayout.addWidget(driverInstance)
-
-
-        

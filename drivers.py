@@ -1,15 +1,11 @@
 from selenium import webdriver
 import threading
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, pyqtSignal, QThread
 import queue
 from uuid import uuid4
 
-class oneDriverType:
-    driver = None
-    number: int = 0
-    dropped: bool = False
-    threadQueue: queue.Queue = None
-    uuid: str = None
+options = webdriver.ChromeOptions()
+# options.add_argument("--headless")
 
 class DriverManager(QObject):
     drivers:dict = {}
@@ -20,14 +16,12 @@ class DriverManager(QObject):
 
     def createDriver(self):
         driverUUID = uuid4()
-        self.status.emit({"msg":"Creating driver ","type":"driverCreating","uuid":driverUUID})
-        options = webdriver.ChromeOptions()
-        # options.add_argument("--headless")
+        self.status.emit({"type":"driverCreating","uuid":driverUUID})
         driver = webdriver.Chrome(options=options)
         threadQueue = queue.Queue()
-        oneDriver: oneDriverType = {"driver":driver,"dropped":False,"threadQueue":threadQueue,"uuid":driverUUID}
+        oneDriver = {"driver":driver,"dropped":False,"threadQueue":threadQueue,"uuid":driverUUID}
         self.drivers[driverUUID] = oneDriver
-        self.status.emit({"msg":"Driver ","type":"driverReady","uuid":driverUUID})
+        self.status.emit({"type":"driverReady","uuid":driverUUID})
         if len(self.drivers) == self.counter:
             self.finished.emit({"msg":"All Drivers Ready","type":"allDriversReady"})
         while True:
@@ -40,7 +34,12 @@ class DriverManager(QObject):
                 driver.close()
                 break
             func , args , kwargs = task
-            func(driver,*args,**kwargs)
+            if func == "assignNumber":
+                driver.execute_script("document.title = 'Driver " + str(args[0]) + "'")
+            elif func == "updateUrl":
+                self.drivers[kwargs['uuid']]['currentDefaultUrl'] = kwargs['url']
+            else:
+                func(driver,*args,**kwargs)
             threadQueue.task_done()
 
     def constructDrivers(self,count):
