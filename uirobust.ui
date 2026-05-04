@@ -366,7 +366,11 @@ max-width:300px;</string>
                  </size>
                 </property>
                 <property name="text">
-                 <string>Get</string>
+                 <string/>
+                </property>
+                <property name="icon">
+                 <iconset>
+                  <normaloff>resources/settings.svg</normaloff>resources/settings.svg</iconset>
                 </property>
                </widget>
               </item>

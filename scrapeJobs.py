@@ -8,6 +8,8 @@ APP_URLS = {
     "ZenHR":"https://app.zenhr.com/en/users/pre_login"
 }
 
+from scrapeJobsHelpers import inputFieldJob, clickButtonJob
+
 class abstractScrapeJob:
     def __init__(self, driver):
         self.driver = driver
@@ -15,6 +17,19 @@ class abstractScrapeJob:
 
     def initiateActions(self,actions):
         self.actions = actions
+
+    def addInputFieldJob(self, **kwargs):
+        field_identifier = kwargs.get("field_identifier")
+        identifier_value = kwargs.get("identifier_value")
+        value = kwargs.get("value")
+        job = (inputFieldJob,{"field_identifier":field_identifier,"identifier_value":identifier_value,"value":value})
+        self.actions.append(job)
+
+    def addClickButtonJob(self, **kwargs):
+        button_identifier = kwargs.get("button_identifier")
+        identifier_value = kwargs.get("identifier_value")
+        job = (clickButtonJob,{"button_identifier":button_identifier,"identifier_value":identifier_value})
+        self.actions.append(job)
 
     def getUrlAction(self):
         action, kwargs = self.actions[0]
