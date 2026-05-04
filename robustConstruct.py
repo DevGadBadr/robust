@@ -1,11 +1,12 @@
 from PyQt5 import QtWidgets
-from PyQt5 import QtCore, QtGui
+from PyQt5 import QtCore
 from PyQt5.QtWidgets import QDialog
+from scrapeJobsHelpers import getUrlJob
 from uirobust import Ui_RobustDialog
 from PyQt5.QtCore import QTimer, Qt
 from workerThread import QWorker
 from collections import deque
-from scrapeJobs import scrapeUrl, app_urls
+from scrapeJobs import APP_URLS, abstractScrapeJob, zenHrAutomation
 
 class RobustConstruct(Ui_RobustDialog):
 
@@ -21,10 +22,16 @@ class RobustConstruct(Ui_RobustDialog):
         RobustDialog.setWindowFlags(RobustDialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         RobustDialog.setWindowFlags(RobustDialog.windowFlags() | Qt.WindowMinimizeButtonHint)
         self.driverInstancePlaceHolder.deleteLater()
-        self.customUrlBox.setDisabled(True)
         self.initiateVariables()
         self.connectActions()
         self.initiateWorker()
+        self.modifyMainDefaultBox()
+
+    def modifyMainDefaultBox(self):
+        self.mainDefaultBox.clear()
+        for key,value in APP_URLS.items():
+            self.mainDefaultBox.addItem(key)
+            self.mainDefaultBox.setItemData(self.mainDefaultBox.count()-1, value)
 
     def initiateVariables(self):
         self.numberOfDrivers = 1
@@ -34,16 +41,7 @@ class RobustConstruct(Ui_RobustDialog):
     def connectActions(self):
         self.slider.valueChanged.connect(self.castSliderChange)
         self.startButton.clicked.connect(self.createDrivers)
-        self.customCheckBox.stateChanged.connect(self.handleCustomCheck)
         self.executeAllButton.clicked.connect(self.executeAllDrivers)
-        
-    def handleCustomCheck(self,state):
-        if state:
-            self.customUrlBox.setDisabled(False)
-            self.mainDefaultBox.setDisabled(True)
-        else:
-            self.customUrlBox.setDisabled(True)
-            self.mainDefaultBox.setDisabled(False)
 
     def castSliderChange(self,value):
         self.driverCountLabel.setText(str(value))
@@ -66,8 +64,15 @@ class RobustConstruct(Ui_RobustDialog):
 
         if event['type'] == "driverReady":
             self.worker.driverManager.drivers[event['uuid']]['number'] = self.nextReadyDriverNumber
-            self.worker.driverManager.drivers[event['uuid']]['currentDefaultUrl'] = app_urls[self.mainDefaultBox.currentText()]
-            self.worker.driverManager.drivers[event['uuid']]['threadQueue'].put(("assignNumber",[self.nextReadyDriverNumber],{}))
+            currentDefaultUrl = APP_URLS[self.mainDefaultBox.currentText()]
+            self.worker.driverManager.drivers[event['uuid']]['threadQueue'].put(("assignNumber", {"number": self.nextReadyDriverNumber}))
+            if currentDefaultUrl == "ZenHR":
+                scrapeJobClass = zenHrAutomation(self.worker.driverManager.drivers[event['uuid']]['driver'])
+                scrapeJobClass.initiateActions([(getUrlJob, {"url": currentDefaultUrl})])
+            else:
+                scrapeJobClass = abstractScrapeJob(self.worker.driverManager.drivers[event['uuid']]['driver'])
+                scrapeJobClass.initiateActions([(getUrlJob, {"url": currentDefaultUrl})])
+            self.worker.driverManager.drivers[event['uuid']]['scrapeJobClass'] = scrapeJobClass
             onDriverReadyInfo = {"number":self.nextReadyDriverNumber,"uuid":event['uuid']}
             self.postToUI("status", {"msg": "Driver Ready " + str(self.nextReadyDriverNumber)})
             self.postToUI("createInstance", onDriverReadyInfo)
@@ -118,7 +123,8 @@ class RobustConstruct(Ui_RobustDialog):
     def executeAllDrivers(self):
         for uuid,driver in self.worker.driverManager.drivers.items():
             if not driver['dropped']:
-                driver['threadQueue'].put((scrapeUrl,[],{"url":driver['currentDefaultUrl']}))
+                pass
+                # driver['threadQueue'].put((scrapeUrl,[],{"url":driver['currentDefaultUrl']}))
 
     def createDriverInstances(self,driverInfo):
         number = driverInfo["number"]
@@ -137,20 +143,55 @@ class RobustConstruct(Ui_RobustDialog):
         driverDefaultUrl = QtWidgets.QComboBox(driverInstance)
         driverDefaultUrl.setMaximumSize(QtCore.QSize(16777215, 30))
         driverDefaultUrl.setObjectName("driverDefaultUrl"+str(uuid))
-        for key,value in app_urls.items():
+        for key,value in APP_URLS.items():
             driverDefaultUrl.addItem(key)
             driverDefaultUrl.setItemData(driverDefaultUrl.count()-1, value)
-        driverDefaultUrl.currentTextChanged.connect(lambda: self.worker.driverManager.drivers[uuid]['threadQueue'].put(("updateUrl",[],{"url":driverDefaultUrl.currentData(),"uuid":uuid})))
+        def handleDriverScrapeJobChange(event):
+            print(event)
+            if event == "ZenHR":
+                scrapeJobClass = zenHrAutomation(self.worker.driverManager.drivers[uuid]['driver'])
+                actions = [(getUrlJob, {"url": APP_URLS[event]})]
+                scrapeJobClass.initiateActions(actions)
+            else:
+                scrapeJobClass = abstractScrapeJob(self.worker.driverManager.drivers[uuid]['driver'])
+                actions = [(getUrlJob, {"url": APP_URLS[event]})]
+                scrapeJobClass.initiateActions(actions)
+            self.worker.driverManager.drivers[uuid]['scrapeJobClass'] = scrapeJobClass
+        def getButtonHandle():
+            executeClass = self.worker.driverManager.drivers[uuid]['scrapeJobClass']
+            func = executeClass.getUrlAction
+            self.worker.driverManager.drivers[uuid]['threadQueue'].put((func,{}))
+        def nextButtonHandle():
+            executeClass = self.worker.driverManager.drivers[uuid]['scrapeJobClass']
+            func = executeClass.executeNextAction
+            self.worker.driverManager.drivers[uuid]['threadQueue'].put((func,{}))
+        def previousButtonHandle():
+            executeClass = self.worker.driverManager.drivers[uuid]['scrapeJobClass']
+            func = executeClass.executePreviousAction
+            self.worker.driverManager.drivers[uuid]['threadQueue'].put((func,{}))
+        driverDefaultUrl.currentTextChanged.connect(handleDriverScrapeJobChange)
         driverDefaultUrl.setCurrentText(self.mainDefaultBox.currentText())
         instanceLayout.addWidget(driverDefaultUrl)
         spacerItem4 = QtWidgets.QSpacerItem(10, 20, QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Minimum)
         instanceLayout.addItem(spacerItem4)
         driverControl = QtWidgets.QPushButton(driverInstance)
         driverControl.setMaximumSize(QtCore.QSize(70, 30))
-        driverControl.setText("Go")
+        driverControl.setText("Get")
         driverControl.setObjectName("driverControl"+str(uuid))
-        driverControl.clicked.connect(lambda:self.worker.driverManager.drivers[uuid]['threadQueue'].put((scrapeUrl,[],{"url":driverDefaultUrl.currentData()})))
+        driverControl.clicked.connect(getButtonHandle)
         instanceLayout.addWidget(driverControl)
+        previousButton = QtWidgets.QPushButton(driverInstance)
+        previousButton.setMaximumSize(QtCore.QSize(60, 16777215))
+        previousButton.setObjectName("previousButton"+str(uuid))
+        previousButton.setText("<Action")
+        previousButton.clicked.connect(previousButtonHandle)
+        instanceLayout.addWidget(previousButton)
+        nextButton = QtWidgets.QPushButton(driverInstance)
+        nextButton.setMaximumSize(QtCore.QSize(60, 16777215))
+        nextButton.setObjectName("nextButton"+str(uuid))
+        nextButton.setText("Action>")
+        nextButton.clicked.connect(nextButtonHandle)
+        instanceLayout.addWidget(nextButton)
         spacerItem1 = QtWidgets.QSpacerItem(10, 20, QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Minimum)
         instanceLayout.addItem(spacerItem1)
         closeDriver = QtWidgets.QPushButton(driverInstance)

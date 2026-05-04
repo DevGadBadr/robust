@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>547</width>
+    <width>585</width>
     <height>669</height>
    </rect>
   </property>
@@ -154,7 +154,7 @@
         </size>
        </property>
        <property name="text">
-        <string>Default URL</string>
+        <string>Default Job</string>
        </property>
       </widget>
      </item>
@@ -205,18 +205,17 @@
       </widget>
      </item>
      <item>
-      <widget class="QCheckBox" name="customCheckBox">
-       <property name="text">
-        <string>Custom</string>
+      <spacer name="horizontalSpacer_4">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
        </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLineEdit" name="customUrlBox">
-       <property name="placeholderText">
-        <string/>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
        </property>
-      </widget>
+      </spacer>
      </item>
     </layout>
    </item>
@@ -294,7 +293,7 @@ max-width:300px;</string>
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>521</width>
+          <width>559</width>
           <height>171</height>
          </rect>
         </property>
@@ -367,7 +366,33 @@ max-width:300px;</string>
                  </size>
                 </property>
                 <property name="text">
-                 <string>Go</string>
+                 <string>Get</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="previousButton">
+                <property name="maximumSize">
+                 <size>
+                  <width>60</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>&lt;Action</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="nextButton">
+                <property name="maximumSize">
+                 <size>
+                  <width>60</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Action&gt;</string>
                 </property>
                </widget>
               </item>
@@ -391,7 +416,7 @@ max-width:300px;</string>
                <widget class="QPushButton" name="closeDriver">
                 <property name="maximumSize">
                  <size>
-                  <width>100</width>
+                  <width>70</width>
                   <height>30</height>
                  </size>
                 </property>
@@ -399,22 +424,6 @@ max-width:300px;</string>
                  <string>Close</string>
                 </property>
                </widget>
-              </item>
-              <item>
-               <spacer name="spacerItem">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
-                </property>
-                <property name="sizeType">
-                 <enum>QSizePolicy::Fixed</enum>
-                </property>
-                <property name="sizeHint" stdset="0">
-                 <size>
-                  <width>10</width>
-                  <height>20</height>
-                 </size>
-                </property>
-               </spacer>
               </item>
              </layout>
             </widget>

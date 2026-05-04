@@ -33,13 +33,11 @@ class DriverManager(QObject):
             if task == "close":
                 driver.close()
                 break
-            func , args , kwargs = task
+            func , kwargs = task
             if func == "assignNumber":
-                driver.execute_script("document.title = 'Driver " + str(args[0]) + "'")
-            elif func == "updateUrl":
-                self.drivers[kwargs['uuid']]['currentDefaultUrl'] = kwargs['url']
+                driver.execute_script("document.title = 'Driver " + str(kwargs['number']) + "'")
             else:
-                func(driver,*args,**kwargs)
+                func()
             threadQueue.task_done()
 
     def constructDrivers(self,count):
