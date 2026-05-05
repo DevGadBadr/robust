@@ -93,8 +93,14 @@
                <layout class="QHBoxLayout" name="onJobLayout">
                 <item>
                  <widget class="QLabel" name="jobName">
+                  <property name="minimumSize">
+                   <size>
+                    <width>40</width>
+                    <height>0</height>
+                   </size>
+                  </property>
                   <property name="text">
-                   <string>Job  1</string>
+                   <string>Job 1</string>
                   </property>
                  </widget>
                 </item>

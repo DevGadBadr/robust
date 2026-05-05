@@ -22,6 +22,7 @@ class RobustConstruct(Ui_RobustDialog):
         super().setupUi(RobustDialog)
         RobustDialog.setWindowFlags(RobustDialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         RobustDialog.setWindowFlags(RobustDialog.windowFlags() | Qt.WindowMinimizeButtonHint)
+        RobustDialog.closeEvent = self.closeEvent
         self.driverInstancePlaceHolder.deleteLater()
         self.initiateVariables()
         self.connectActions()
@@ -65,6 +66,12 @@ class RobustConstruct(Ui_RobustDialog):
             self.postToUI("status", {"msg": "Creating Driver " + str(self.nextDriverNumber)})
             self.nextDriverNumber += 1
 
+        if event['type'] == "driverDied":
+            driverNumber = self.worker.driverManager.drivers[event['uuid']]['number']
+            self.postToUI("status", {"msg": "Driver " + str(driverNumber) + " Died"})
+            self.worker.driverManager.drivers[event['uuid']]['dropped'] = True
+            self.updateCounter()
+
         if event['type'] == "driverReady":
             self.worker.driverManager.drivers[event['uuid']]['number'] = self.nextReadyDriverNumber
             currentDefaultUrl = APP_URLS[self.mainDefaultBox.currentText()]
@@ -97,10 +104,13 @@ class RobustConstruct(Ui_RobustDialog):
         self.updateCounter()
 
     def closeAllDrivers(self):
+        print("Closing All Drivers")
         for uuid,driver in self.worker.driverManager.drivers.items():
             if not driver['dropped']:
                 self.closeDriverInstance(uuid)
+        print("All Drivers Closed")
         self.postToUI("cleanStatus", self.statusArea.clear)
+        print("UI Status Cleaned")
         self.startButton.setDisabled(False)
 
     def updateCounter(self):
@@ -129,6 +139,16 @@ class RobustConstruct(Ui_RobustDialog):
             if not driver['dropped']:
                 pass
                 # driver['threadQueue'].put((scrapeUrl,[],{"url":driver['currentDefaultUrl']}))
+
+    def closeEvent(self,event):
+        self.worker.driverManager.appClosed = True
+        print("App Closed. Closing Drivers.")
+        self.uiUpdateTimer.stop()
+        self.worker.driverManager.createTimer.stop()
+        print("Closing Remaining Drivers.")
+        self.closeAllDrivers()
+        print("All Drivers Closed. Closing App.")
+        event.accept()
 
     def createDriverInstances(self,driverInfo):
         number = driverInfo["number"]

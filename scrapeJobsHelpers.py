@@ -1,3 +1,20 @@
+from selenium.webdriver.common.by import By
+
+JOP_TYPES = {
+    "geturl": "Get URL",
+    "inputfield": "Input Field",
+    "clickbutton": "Click Button"
+}
+
+IDENTIFIER_VALUES = {
+    "ID": By.ID,
+    "NAME": By.NAME,
+    "XPATH": By.XPATH, #//*[contains(text(),"text")] For text 
+    "CSS_SELECTOR": By.CSS_SELECTOR,
+    "CLASS_NAME": By.CLASS_NAME,
+    "TAG_NAME": By.TAG_NAME
+}
+
 def getUrlJob(driver, **kwargs):
     url = kwargs.get("url")
     driver.get(url)

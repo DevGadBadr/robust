@@ -2,6 +2,7 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtCore import Qt
 from uijobs import Ui_JobsDialog
 from PyQt5.QtWidgets import QDialog
+from scrapeJobsHelpers import JOP_TYPES
 
 class JobsConstruct(Ui_JobsDialog):
 
@@ -15,12 +16,32 @@ class JobsConstruct(Ui_JobsDialog):
         JobsDialog.setWindowFlags(JobsDialog.windowFlags() | Qt.WindowMinimizeButtonHint)
         self.initiateVariables()
         self.connectActions()
+        self.initiateOptions()
+
+    def initiateOptions(self):
+        for jobType in JOP_TYPES:
+            self.jobTypeSelector.addItem(JOP_TYPES[jobType], jobType)
+        identifierTypes = ["ID","NAME","XPATH","CSS_SELECTOR"]
+        for identifierType in identifierTypes:
+            self.identifierTypeSelector.addItem(identifierType, identifierType)
 
     def initiateVariables(self):
-        self.nextJobNumber = 1
+        self.nextJobNumber = 2
 
     def connectActions(self):
         self.addJobButton.clicked.connect(self.addJobHandle)
+        self.jobTypeSelector.currentTextChanged.connect(self.jobTypeChangedHandle)
+
+    def jobTypeChangedHandle(self, text):
+        if text == "Get URL":
+            self.identifierTypeSelector.setDisabled(True)
+            self.identifierValueBox.setDisabled(True)
+        elif text == "Click Button":
+            self.valueBox.setDisabled(True)
+        else:
+            self.valueBox.setDisabled(False)
+            self.identifierValueBox.setDisabled(False)
+            self.identifierTypeSelector.setDisabled(False)
 
     def addJobHandle(self):
         print("Add Job Clicked")
@@ -40,9 +61,11 @@ class JobsConstruct(Ui_JobsDialog):
         oneJobLayout.addWidget(identifierTypeSelector)
         identifierValueBox = QtWidgets.QLineEdit(oneJob)
         identifierValueBox.setObjectName("identifierValueBox")
+        identifierValueBox.setPlaceholderText("Identifier Value")
         oneJobLayout.addWidget(identifierValueBox)
         valueBox = QtWidgets.QLineEdit(oneJob)
         valueBox.setObjectName("valueBox")
+        valueBox.setPlaceholderText("Value")
         oneJobLayout.addWidget(valueBox)
         doneCheckBox = QtWidgets.QCheckBox(oneJob)
         doneCheckBox.setObjectName("doneCheckBox")
