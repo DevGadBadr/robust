@@ -1,3 +1,5 @@
+import json
+
 from PyQt5 import QtWidgets
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QDialog
@@ -61,6 +63,19 @@ class RobustConstruct(Ui_RobustDialog):
         self.startButton.setDisabled(True)
         self.worker.run(self.numberOfDrivers)
 
+    def getActionsForDefaultUrl(self, defaultUrl):
+        with open("./resources/jobs.json","r") as f:
+            jobsFile = json.load(f)
+        jobsDict: dict =jobsFile['jobs']
+        actions = []
+        if defaultUrl in jobsDict.keys():
+            jobs:list = jobsDict[defaultUrl]
+            for job in jobs:
+                jobType, kwargs = job
+                if jobType == "Get URL":
+                    actions.append((getUrlJob,kwargs))
+        return actions
+
     def handleQThreadStatus(self,event):
         if event['type'] == "driverCreating":
             self.postToUI("status", {"msg": "Creating Driver " + str(self.nextDriverNumber)})
@@ -77,12 +92,9 @@ class RobustConstruct(Ui_RobustDialog):
             currentDefaultUrl = APP_URLS[self.mainDefaultBox.currentText()]
             self.worker.driverManager.drivers[event['uuid']]['threadQueue'].put(("assignNumber", {"number": self.nextReadyDriverNumber}))
             driver = self.worker.driverManager.drivers[event['uuid']]['driver']
-            if currentDefaultUrl == "ZenHR":
-                scrapeJobClass = zenHrAutomation(driver)
-                scrapeJobClass.initiateActions([(getUrlJob, {"url": currentDefaultUrl})])
-            else:
-                scrapeJobClass = abstractScrapeJob(driver)
-                scrapeJobClass.initiateActions([(getUrlJob, {"url": currentDefaultUrl})])
+            scrapeJobClass = abstractScrapeJob(driver)
+            actions = self.getActionsForDefaultUrl(currentDefaultUrl)
+            scrapeJobClass.initiateActions(actions)
             self.worker.driverManager.drivers[event['uuid']]['scrapeJobClass'] = scrapeJobClass
             onDriverReadyInfo = {"number":self.nextReadyDriverNumber,"uuid":event['uuid']}
             self.postToUI("status", {"msg": "Driver Ready " + str(self.nextReadyDriverNumber)})
@@ -172,18 +184,13 @@ class RobustConstruct(Ui_RobustDialog):
             driverDefaultUrl.setItemData(driverDefaultUrl.count()-1, value)
         def handleDriverScrapeJobChange(event):
             print(event)
-            if event == "ZenHR":
-                scrapeJobClass = zenHrAutomation(self.worker.driverManager.drivers[uuid]['driver'])
-                actions = [(getUrlJob, {"url": APP_URLS[event]})]
-                scrapeJobClass.initiateActions(actions)
-            else:
-                scrapeJobClass = abstractScrapeJob(self.worker.driverManager.drivers[uuid]['driver'])
-                actions = [(getUrlJob, {"url": APP_URLS[event]})]
-                scrapeJobClass.initiateActions(actions)
+            scrapeJobClass = abstractScrapeJob(self.worker.driverManager.drivers[uuid]['driver'])
+            actions = self.getActionsForDefaultUrl(event)
+            scrapeJobClass.initiateActions(actions)
             self.worker.driverManager.drivers[uuid]['scrapeJobClass'] = scrapeJobClass
         def controlButtonHandle():
             jobsDialog = QDialog()
-            jobsDialogClass = JobsConstruct(self)
+            jobsDialogClass = JobsConstruct(self, driverDefaultUrl.currentText(), uuid)
             jobsDialogClass.setupUi(jobsDialog)
             self.worker.driverManager.drivers[uuid]['settingsWindow'] = jobsDialog
             self.worker.driverManager.drivers[uuid]['settingsWindowClass'] = jobsDialogClass  

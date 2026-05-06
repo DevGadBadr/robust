@@ -8,15 +8,47 @@ APP_URLS = {
     "ZenHR":"https://app.zenhr.com/en/users/pre_login"
 }
 
-from scrapeJobsHelpers import inputFieldJob, clickButtonJob
+import json
+
+from scrapeJobsHelpers import getUrlJob,inputFieldJob, clickButtonJob
 
 class abstractScrapeJob:
     def __init__(self, driver):
         self.driver = driver
-        self.executePostion = 0
+        self.executePosition = 0
+        self.firstExecuted = False
+        self.lastExecuted = False
 
     def initiateActions(self,actions):
         self.actions = actions
+
+    def saveJobIfNotExist(self, job, owner):
+        with open("./resources/jobs.json","r") as f:
+            jobsFile = json.load(f)
+        jobsDict: dict =jobsFile['jobs']
+        if owner in jobsDict.keys():
+            jobs:list = jobsDict[owner]
+            for existingJob in jobs:
+                if existingJob[1]['url'] == job[1]['url']:
+                    print("Job already exists. Not saving.")
+                    return
+            jobs.append(job)
+            jobsDict[owner] = jobs
+        else:
+            jobs = [job]
+            jobsDict[owner] = jobs
+        with open("./resources/jobs.json",'w') as f:
+            json.dump({"jobs": jobsDict} , f)
+        print(f"Added Get URL job with url: {job[1]['url']} for owner: {owner}")
+
+
+    def addGetUrlJob(self, **kwargs):
+        url = kwargs.get("url")
+        owner = kwargs.get("owner")
+        job = (getUrlJob,{"url":url})
+        self.actions.append(job)
+        self.lastExecuted = False
+        self.saveJobIfNotExist(("GetUrl",{"url":url}),owner)
 
     def addInputFieldJob(self, **kwargs):
         field_identifier = kwargs.get("field_identifier")
@@ -24,12 +56,14 @@ class abstractScrapeJob:
         value = kwargs.get("value")
         job = (inputFieldJob,{"field_identifier":field_identifier,"identifier_value":identifier_value,"value":value})
         self.actions.append(job)
+        self.lastExecuted = False
 
     def addClickButtonJob(self, **kwargs):
         button_identifier = kwargs.get("button_identifier")
         identifier_value = kwargs.get("identifier_value")
         job = (clickButtonJob,{"button_identifier":button_identifier,"identifier_value":identifier_value})
         self.actions.append(job)
+        self.lastExecuted = False
 
     def getUrlAction(self):
         action, kwargs = self.actions[0]
@@ -37,21 +71,51 @@ class abstractScrapeJob:
         return "Done"
 
     def executeNextAction(self):
-        if self.executePostion < len(self.actions):
-            action, kwargs = self.actions[self.executePostion]
-            result = action(self.driver, **kwargs)
-            self.executePostion += 1
-            return(result)
-        else:
-           return "No more actions to execute"
+        actionsLength = len(self.actions)
+        if actionsLength == 1:
+            if not self.lastExecuted:
+                function, kwargs = self.actions[0]
+                function(self.driver, **kwargs)
+                self.lastExecuted = True
+                self.firstExecuted = True
+                print("Done")
+                return
+        if actionsLength > 1:
+            if self.executePosition+1 == actionsLength:
+                if not self.lastExecuted:
+                    function, kwargs = self.actions[self.executePosition]
+                    result = function(self.driver, **kwargs)
+                    print(result)
+                    self.lastExecuted = True
+                return
+            function, kwargs = self.actions[self.executePosition]
+            result = function(self.driver, **kwargs)
+            print(result)
+            self.executePosition += 1
+            self.firstExecuted = False
 
     def executePreviousAction(self):
-        if self.executePostion > 0:
-            self.executePostion -= 1
-            action, kwargs = self.actions[self.executePostion]
-            action(self.driver, **kwargs)
-        else:
-            return "No previous actions to execute"
+        actionsLength = len(self.actions)
+        if actionsLength == 1:
+            self.driver.back()
+            self.lastExecuted = False
+            print("Done")
+            return
+        if actionsLength > 1:
+            if self.executePosition == 0:
+                if not self.firstExecuted:
+                    function, kwargs = self.actions[self.executePosition]
+                    result = function(self.driver, **kwargs)
+                    print(result)
+                    self.firstExecuted = True
+                else:
+                    self.driver.back()
+                return
+            function, kwargs = self.actions[self.executePosition-1]
+            result = function(self.driver, **kwargs)
+            print(result)
+            self.executePosition -= 1
+            self.lastExecuted = False
 
 class zenHrAutomation(abstractScrapeJob):
     # Identifiers for this scrape job

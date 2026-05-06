@@ -6,7 +6,7 @@ import queue
 from uuid import uuid4
 
 options = webdriver.ChromeOptions()
-options.add_argument("--headless")
+# options.add_argument("--headless")
 
 class DriverManager(QObject):
     drivers:dict = {}
