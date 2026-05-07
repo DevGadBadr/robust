@@ -5,9 +5,6 @@ from collections import deque
 import queue
 from uuid import uuid4
 
-options = webdriver.ChromeOptions()
-# options.add_argument("--headless")
-
 class DriverManager(QObject):
     drivers:dict = {}
     threads:list = []
@@ -23,11 +20,13 @@ class DriverManager(QObject):
         self.createTimer.timeout.connect(self.processNextDriverCreate)
         self.createQueue = deque()
         
-    def createDriver(self):
+    def createDriver(self, isHidden):
         print("Creating Driver " + str(self.counter))
         driverUUID = uuid4()
         self.status.emit({"type":"driverCreating","uuid":driverUUID})
-        print("Creating Driver " + str(self.counter))
+        options = webdriver.ChromeOptions()
+        if isHidden:
+            options.add_argument("--headless")
         driver = webdriver.Chrome(options=options)
         threadQueue = queue.Queue()
         oneDriver = {"driver":driver,"dropped":False,"threadQueue":threadQueue,"uuid":driverUUID}
@@ -54,13 +53,14 @@ class DriverManager(QObject):
             if func == "assignNumber":
                 driver.execute_script("document.title = 'Driver " + str(kwargs['number']) + "'")
             else:
-                func()
+                result, jobuuid, direction = func()
+                self.status.emit({"type":"driverResult", "result":result, "uuid":driverUUID, "jobuuid": jobuuid, "direction": direction})
             threadQueue.task_done()
 
-    def constructDrivers(self, count):
+    def constructDrivers(self, count, isHidden):
         self.createTimer.start()
         for _ in range(count):
-            driverThread = threading.Thread(target=self.createDriver)
+            driverThread = threading.Thread(target=self.createDriver, args=(isHidden,))
             self.threads.append(driverThread)
             self.createQueue.append(driverThread)
             self.counter += 1

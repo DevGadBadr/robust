@@ -4,6 +4,7 @@ from uijobs import Ui_JobsDialog
 from PyQt5.QtWidgets import QDialog
 from scrapeJobsHelpers import JOP_TYPES, IDENTIFIER_VALUES
 import json
+import uuid
 
 class JobsConstruct(Ui_JobsDialog):
 
@@ -18,59 +19,69 @@ class JobsConstruct(Ui_JobsDialog):
         JobsDialog.setWindowFlags(JobsDialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         JobsDialog.setWindowFlags(JobsDialog.windowFlags() | Qt.WindowMinimizeButtonHint)
         self.statusLabel.setText(self.jobsFor)
+        self.oneJob.deleteLater()
         self.initiateVariables()
         self.connectActions()
         self.initiateJobTypeOptions(self.jobTypeSelector)
         self.initiateIdentifierTypeOptions(self.identifierTypeSelector)
-        self.initiateSavedJobs()
+        self.initiateSavedJobs(self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].actions)
 
-    def initiateSavedJobs(self):
-        with open("./resources/jobs.json","r") as f:
-            jobsFile = json.load(f)
-        jobsDict: dict =jobsFile['jobs']
-        if self.jobsFor in jobsDict.keys():
-            jobs:list = jobsDict[self.jobsFor]
-            for job in jobs:
-                jobType, kwargs = job
-                if jobType == "Get URL":
-                    self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addGetUrlJob(**kwargs)
+    def initiateSavedJobs(self, actions=None):
+        if actions is None:
+            return
+        for job in actions:
+            kwargs = job[1]
+            if kwargs.get("jobtype") == "GetUrl":
+                url = kwargs.get("url")
+                uuid = kwargs.get("uuid")
+                isexecuted = kwargs.get("isexecuted", False)
+                self.addJobHandle()
+                print("Initiating saved job with url: " + url)
+                lastJobWidget = self.groupBox.findChild(QtWidgets.QWidget, "oneJob"+str(self.nextJobNumber-1))
+                lastJobWidget.setProperty("uuid", uuid)
+                print(lastJobWidget.objectName())
+                jobTypeSelector = lastJobWidget.findChild(QtWidgets.QComboBox, "jobTypeSelector"+str(self.nextJobNumber-1))
+                jobTypeSelector.setCurrentText("Get URL")
+                valueBox = lastJobWidget.findChild(QtWidgets.QLineEdit, "valueBox"+str(self.nextJobNumber-1))
+                valueBox.setText(url)
+                doneCheckBox = lastJobWidget.findChild(QtWidgets.QCheckBox, "doneCheckBox"+str(self.nextJobNumber-1))
+                doneCheckBox.setChecked(isexecuted)
+                doneCheckBox.setObjectName("doneCheckBox"+str(uuid))
 
-    def initiateJobTypeOptions(self, selector):
-        for key, value in JOP_TYPES.items():
-            selector.addItem(value, key)
+    def updateJobExecutionStatus(self, jobuuid, direction):
+        checkBox = self.groupBox.findChild(QtWidgets.QCheckBox, "doneCheckBox"+str(jobuuid))
+        if checkBox:
+            if direction == "forward":
+                checkBox.setChecked(True)
+            elif direction == "backward":
+                checkBox.setChecked(False)  
 
-    def initiateIdentifierTypeOptions(self, selector):
-        for key, value in IDENTIFIER_VALUES.items():
-            selector.addItem(key, value)
+    def initiateJobTypeOptions(self, comboBox):
+        for jobType in JOP_TYPES.values():
+            comboBox.addItem(jobType)
+
+    def initiateIdentifierTypeOptions(self, comboBox):
+        for identifierType in IDENTIFIER_VALUES.keys():
+            comboBox.addItem(identifierType)
 
     def initiateVariables(self):
-        self.nextJobNumber = 2
+        self.nextJobNumber = 1
 
     def connectActions(self):
         self.addJobButton.clicked.connect(self.addJobHandle)
         self.jobTypeSelector.currentTextChanged.connect(self.jobTypeChangedHandle)
-        self.saveJobButton.clicked.connect(self.saveJobHandle)
         self.saveAllButton.clicked.connect(self.saveAllHandle)
         self.deleteJobButton.clicked.connect(self.deleteJobHandle)
 
     def saveAllHandle(self):
         print("Saving all jobs...")
 
-    def saveJobHandle(self):       
-        jobType = self.jobTypeSelector.currentText()
-        identifierType = self.identifierTypeSelector.currentText() if self.identifierTypeSelector.isEnabled() else None
-        identifierValue = self.identifierValueBox.text() if self.identifierValueBox.isEnabled() else None
-        value = self.valueBox.text() if self.valueBox.isEnabled() else None
-        if jobType == "Get URL":
-            if not value.startswith(("http://","https://")):
-                print("This is not a valid url")
-            else:
-                self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addGetUrlJob(url=value, owner=self.jobsFor)
-
     def deleteJobHandle(self): 
         button = self.groupBox.sender()
         jobWidget = button.parent()
         jobWidget.deleteLater()
+        jobuuid = jobWidget.property("uuid")
+        self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].deleteJob(uuid=jobuuid, owner=self.jobsFor)
 
     def jobTypeChangedHandle(self, text):
         if text == "Get URL":
@@ -133,17 +144,17 @@ class JobsConstruct(Ui_JobsDialog):
                 if not value.startswith(("http://","https://")):
                     print("This is not a valid url")
                 else:
-                    self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addGetUrlJob(url=value, owner=self.jobsFor)
+                    jobuuid = str(uuid.uuid4())
+                    oneJob.setProperty("uuid", jobuuid)
+                    doneCheckBox.setObjectName("doneCheckBox"+str(jobuuid))
+                    self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addGetUrlJob(url=value, owner=self.jobsFor, uuid=jobuuid)
         saveJobButton.clicked.connect(saveJobHandle)
         oneJobLayout.addWidget(saveJobButton)
         deleteJobButton = QtWidgets.QPushButton(oneJob)
         deleteJobButton.setMaximumSize(QtCore.QSize(50, 16777215))
         deleteJobButton.setObjectName("deleteJobButton"+str(self.nextJobNumber)) 
         deleteJobButton.setText("Delete")
-        def deleteJobHandle():
-            self.jobsContainerLayout.removeWidget(oneJob)
-            oneJob.deleteLater()
-        deleteJobButton.clicked.connect(deleteJobHandle)
+        deleteJobButton.clicked.connect(self.deleteJobHandle)
         oneJobLayout.addWidget(deleteJobButton)
         self.jobsContainerLayout.addWidget(oneJob)
         jobName.setText("Job " + str(self.nextJobNumber))

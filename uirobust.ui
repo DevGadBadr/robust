@@ -205,6 +205,13 @@
       </widget>
      </item>
      <item>
+      <widget class="QCheckBox" name="hiddenCheckbox">
+       <property name="text">
+        <string>Hidden</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <spacer name="horizontalSpacer_4">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>

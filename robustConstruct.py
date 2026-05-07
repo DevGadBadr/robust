@@ -61,18 +61,19 @@ class RobustConstruct(Ui_RobustDialog):
 
     def createDrivers(self):
         self.startButton.setDisabled(True)
-        self.worker.run(self.numberOfDrivers)
+        self.worker.run(self.numberOfDrivers, self.hiddenCheckbox.isChecked())
 
-    def getActionsForDefaultUrl(self, defaultUrl):
+    def getActionsForScrapeJob(self, defaultScrapeJob):
         with open("./resources/jobs.json","r") as f:
             jobsFile = json.load(f)
         jobsDict: dict =jobsFile['jobs']
         actions = []
-        if defaultUrl in jobsDict.keys():
-            jobs:list = jobsDict[defaultUrl]
+        if defaultScrapeJob in jobsDict.keys():
+            jobs:list = jobsDict[defaultScrapeJob]
             for job in jobs:
                 jobType, kwargs = job
-                if jobType == "Get URL":
+                kwargs["isexecuted"] = False
+                if jobType == "GetUrl":
                     actions.append((getUrlJob,kwargs))
         return actions
 
@@ -89,11 +90,10 @@ class RobustConstruct(Ui_RobustDialog):
 
         if event['type'] == "driverReady":
             self.worker.driverManager.drivers[event['uuid']]['number'] = self.nextReadyDriverNumber
-            currentDefaultUrl = APP_URLS[self.mainDefaultBox.currentText()]
             self.worker.driverManager.drivers[event['uuid']]['threadQueue'].put(("assignNumber", {"number": self.nextReadyDriverNumber}))
             driver = self.worker.driverManager.drivers[event['uuid']]['driver']
             scrapeJobClass = abstractScrapeJob(driver)
-            actions = self.getActionsForDefaultUrl(currentDefaultUrl)
+            actions = self.getActionsForScrapeJob(self.mainDefaultBox.currentText())
             scrapeJobClass.initiateActions(actions)
             self.worker.driverManager.drivers[event['uuid']]['scrapeJobClass'] = scrapeJobClass
             onDriverReadyInfo = {"number":self.nextReadyDriverNumber,"uuid":event['uuid']}
@@ -102,6 +102,22 @@ class RobustConstruct(Ui_RobustDialog):
             self.nextReadyDriverNumber += 1
             self.updateCounter()
 
+        if event['type'] == "driverResult":
+            jobuuid = event['jobuuid']
+            direction = event['direction']
+            executeClass = self.worker.driverManager.drivers[event['uuid']]['scrapeJobClass']
+            actions = executeClass.actions
+            for action in actions:
+                if action[1].get("uuid") == jobuuid:
+                    if direction == "forward":
+                        action[1]['isexecuted'] = True
+                    elif direction == "backward":
+                        action[1]['isexecuted'] = False
+                    break
+            if "settingsWindowClass" in self.worker.driverManager.drivers[event['uuid']].keys():
+                jobSettingsClass = self.worker.driverManager.drivers[event['uuid']]['settingsWindowClass']
+                jobSettingsClass.updateJobExecutionStatus(jobuuid, direction)
+
     def QThreadFinished(self,event):
         self.startButton.setDisabled(False)
 
@@ -109,6 +125,8 @@ class RobustConstruct(Ui_RobustDialog):
         driverNumber = self.worker.driverManager.drivers[uuid]['number']
         print("Closing Driver " + str(driverNumber))
         self.worker.driverManager.drivers[uuid]['threadQueue'].put("close")
+        if 'settingsWindow' in self.worker.driverManager.drivers[uuid].keys():
+            self.worker.driverManager.drivers[uuid]['settingsWindow'].close()   
         driverInstance = self.scrollAreaWidgetContents.findChild(QtWidgets.QWidget,"driverInstance"+str(uuid))
         driverInstance.deleteLater()
         self.postToUI("status", {"msg": "Driver " + str(driverNumber) + " Closed"})
@@ -120,6 +138,8 @@ class RobustConstruct(Ui_RobustDialog):
         for uuid,driver in self.worker.driverManager.drivers.items():
             if not driver['dropped']:
                 self.closeDriverInstance(uuid)
+                if 'settingsWindow' in self.worker.driverManager.drivers[uuid].keys():
+                    self.worker.driverManager.drivers[uuid]['settingsWindow'].close()
         print("All Drivers Closed")
         self.postToUI("cleanStatus", self.statusArea.clear)
         print("UI Status Cleaned")
@@ -150,7 +170,6 @@ class RobustConstruct(Ui_RobustDialog):
         for uuid,driver in self.worker.driverManager.drivers.items():
             if not driver['dropped']:
                 pass
-                # driver['threadQueue'].put((scrapeUrl,[],{"url":driver['currentDefaultUrl']}))
 
     def closeEvent(self,event):
         self.worker.driverManager.appClosed = True
@@ -185,7 +204,7 @@ class RobustConstruct(Ui_RobustDialog):
         def handleDriverScrapeJobChange(event):
             print(event)
             scrapeJobClass = abstractScrapeJob(self.worker.driverManager.drivers[uuid]['driver'])
-            actions = self.getActionsForDefaultUrl(event)
+            actions = self.getActionsForScrapeJob(driverDefaultUrl.currentText())
             scrapeJobClass.initiateActions(actions)
             self.worker.driverManager.drivers[uuid]['scrapeJobClass'] = scrapeJobClass
         def controlButtonHandle():
