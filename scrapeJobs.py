@@ -28,9 +28,17 @@ class abstractScrapeJob:
         if owner in jobsDict.keys():
             jobs:list = jobsDict[owner]
             for existingJob in jobs:
-                if existingJob[1]['url'] == job[1]['url']:
-                    print("Job already exists. Not saving.")
-                    return
+                jobType = job[1]['jobtype']  
+                existingJobType = existingJob[1]['jobtype']             
+                if jobType == "GetUrl" and existingJobType == "GetUrl":
+                    if existingJob[1]['url'] == job[1]['url']:
+                        return "exists"
+                elif jobType == "ClickButton" and existingJobType == "ClickButton":
+                    if existingJob[1]['button_identifier'] == job[1]['button_identifier'] and existingJob[1]['identifier_value'] == job[1]['identifier_value']:
+                        return "exists"
+                elif jobType == "InputField" and existingJobType == "InputField":
+                    if existingJob[1]['field_identifier'] == job[1]['field_identifier'] and existingJob[1]['identifier_value'] == job[1]['identifier_value'] and existingJob[1]['value'] == job[1]['value']:
+                        return "exists"
             jobs.append(job)
             jobsDict[owner] = jobs
         else:
@@ -38,8 +46,8 @@ class abstractScrapeJob:
             jobsDict[owner] = jobs
         with open("./resources/jobs.json",'w') as f:
             json.dump({"jobs": jobsDict} , f)
-        print(f"Added Get URL job with url: {job[1]['url']} for owner: {owner}")
-
+        return "Saved"
+    
     def deleteJob(self, uuid, owner):
         for action in self.actions:
             if action[1].get("uuid") == uuid:
@@ -68,7 +76,8 @@ class abstractScrapeJob:
         job = (getUrlJob,{"url":url, "uuid": uuid, "jobtype": joptype})
         self.actions.append(job)
         self.lastExecuted = False
-        self.saveJobIfNotExist(("GetUrl",{"url":url, "uuid": uuid, "jobtype": joptype}), owner)
+        saveResult = self.saveJobIfNotExist(("GetUrl",{"url":url, "uuid": uuid, "jobtype": joptype}), owner)
+        return saveResult
 
     def addInputFieldJob(self, **kwargs):
         field_identifier = kwargs.get("field_identifier")
@@ -76,18 +85,24 @@ class abstractScrapeJob:
         value = kwargs.get("value")
         uuid = kwargs.get("uuid")
         joptype = "InputField"
+        owner = kwargs.get("owner")
         job = (inputFieldJob,{"field_identifier":field_identifier,"identifier_value":identifier_value,"value":value, "uuid": uuid, "jobtype": joptype})
         self.actions.append(job)
         self.lastExecuted = False
+        saveResult = self.saveJobIfNotExist(("InputField",{"field_identifier":field_identifier,"identifier_value":identifier_value,"value":value, "uuid": uuid, "jobtype": joptype}), owner)
+        return saveResult
 
     def addClickButtonJob(self, **kwargs):
         button_identifier = kwargs.get("button_identifier")
         identifier_value = kwargs.get("identifier_value")
         uuid = kwargs.get("uuid")
         joptype = "ClickButton"
+        owner = kwargs.get("owner")
         job = (clickButtonJob,{"button_identifier":button_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype})
         self.actions.append(job)
         self.lastExecuted = False
+        saveResult = self.saveJobIfNotExist(("ClickButton",{"button_identifier":button_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype}), owner)
+        return saveResult
 
     def executeNextAction(self):
         actionsLength = len(self.actions)
@@ -100,18 +115,22 @@ class abstractScrapeJob:
                 self.firstExecuted = True
                 return result
         if actionsLength > 1:
-            if self.executePosition+1 == actionsLength:
+            if self.executePosition+1 == actionsLength or self.executePosition == actionsLength:
                 if not self.lastExecuted:
                     function, kwargs = self.actions[self.executePosition]
                     kwargs['direction'] = "forward"
                     result = function(self.driver, **kwargs)
                     self.lastExecuted = True
+                    print(self.executePosition, actionsLength, self.lastExecuted, "last")
                     return result
+                self.executePosition = len(self.actions)
+                return "End of actions", "end", "forward"
             function, kwargs = self.actions[self.executePosition]
             kwargs['direction'] = "forward"
             result = function(self.driver, **kwargs)
             self.executePosition += 1
             self.firstExecuted = False
+            print(self.executePosition, actionsLength, self.lastExecuted, "next")
             return result
 
     def executePreviousAction(self):

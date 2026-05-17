@@ -1,5 +1,5 @@
 from selenium.webdriver.common.by import By
-
+from selenium.common.exceptions import NoSuchElementException, ElementNotInteractableException
 JOP_TYPES = {
     "geturl": "Get URL",
     "inputfield": "Input Field",
@@ -38,6 +38,12 @@ def clickButtonJob(driver, **kwargs):
     identifier_value = kwargs.get("identifier_value")
     jobuuid = kwargs.get("uuid")
     direction = kwargs.get("direction", "forward")
-    button = driver.find_element(button_identifier, identifier_value)
-    button.click()
+    try:
+        button = driver.find_element(button_identifier, identifier_value)
+    except NoSuchElementException:
+        return "Error: Button not found", jobuuid, direction
+    try:
+        button.click()
+    except ElementNotInteractableException:
+        return "Error: Button not interactable", jobuuid, direction
     return "Done", jobuuid, direction

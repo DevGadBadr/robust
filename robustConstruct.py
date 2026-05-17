@@ -3,7 +3,7 @@ import json
 from PyQt5 import QtWidgets
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QDialog
-from scrapeJobsHelpers import getUrlJob
+from scrapeJobsHelpers import clickButtonJob, getUrlJob, inputFieldJob
 from uirobust import Ui_RobustDialog
 from jobsConstruct import JobsConstruct
 from PyQt5.QtCore import QTimer, Qt
@@ -30,7 +30,7 @@ class RobustConstruct(Ui_RobustDialog):
         self.connectActions()
         self.initiateWorker()
         self.modifyMainDefaultBox()
-        self.startButton.click()
+        # self.startButton.click()
 
 
     def modifyMainDefaultBox(self):
@@ -75,6 +75,10 @@ class RobustConstruct(Ui_RobustDialog):
                 kwargs["isexecuted"] = False
                 if jobType == "GetUrl":
                     actions.append((getUrlJob,kwargs))
+                elif jobType == "InputField":
+                    actions.append((inputFieldJob,kwargs))
+                elif jobType == "ClickButton":
+                    actions.append((clickButtonJob,kwargs))
         return actions
 
     def handleQThreadStatus(self,event):
@@ -105,6 +109,7 @@ class RobustConstruct(Ui_RobustDialog):
         if event['type'] == "driverResult":
             jobuuid = event['jobuuid']
             direction = event['direction']
+            result = event['result']
             executeClass = self.worker.driverManager.drivers[event['uuid']]['scrapeJobClass']
             actions = executeClass.actions
             for action in actions:
@@ -116,7 +121,7 @@ class RobustConstruct(Ui_RobustDialog):
                     break
             if "settingsWindowClass" in self.worker.driverManager.drivers[event['uuid']].keys():
                 jobSettingsClass = self.worker.driverManager.drivers[event['uuid']]['settingsWindowClass']
-                jobSettingsClass.updateJobExecutionStatus(jobuuid, direction)
+                jobSettingsClass.updateJobExecutionStatus(jobuuid, direction, result)
 
     def QThreadFinished(self,event):
         self.startButton.setDisabled(False)
