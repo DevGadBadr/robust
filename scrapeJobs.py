@@ -9,7 +9,7 @@ APP_URLS = {
 }
 
 import json
-from scrapeJobsHelpers import getUrlJob,inputFieldJob, clickButtonJob
+from scrapeJobsHelpers import getUrlJob, inputFieldJob, clickButtonJob
 
 class abstractScrapeJob:
     def __init__(self, driver):
@@ -18,13 +18,14 @@ class abstractScrapeJob:
         self.firstExecuted = False
         self.lastExecuted = False
 
-    def initiateActions(self,actions):
+    def initiateActions(self, actions):
         self.actions = actions
 
     def saveJobIfNotExist(self, job, owner):
         with open("./resources/jobs.json","r") as f:
             jobsFile = json.load(f)
         jobsDict:dict = jobsFile['jobs']
+        updateFlag = False
         if owner in jobsDict.keys():
             jobs:list = jobsDict[owner]
             for existingJob in jobs:
@@ -32,22 +33,56 @@ class abstractScrapeJob:
                 existingJobType = existingJob[1]['jobtype']             
                 if jobType == "GetUrl" and existingJobType == "GetUrl":
                     if existingJob[1]['url'] == job[1]['url']:
-                        return "exists"
+                        self.actions.pop()
+                        return "Job Exists"
+                    else:
+                        existingJob[1]['url'] = job[1]['url']
+                        for action in self.actions:
+                            if action[1].get("uuid") == job[1].get("uuid"):
+                                action[1]['url'] = job[1]['url']
+                                break
+                        updateFlag = True
                 elif jobType == "ClickButton" and existingJobType == "ClickButton":
                     if existingJob[1]['button_identifier'] == job[1]['button_identifier'] and existingJob[1]['identifier_value'] == job[1]['identifier_value']:
-                        return "exists"
+                        self.actions.pop()
+                        return "Job Exists"
+                    else:
+                        existingJob[1]['button_identifier'] = job[1]['button_identifier']
+                        existingJob[1]['identifier_value'] = job[1]['identifier_value']
+                        for action in self.actions:
+                            if action[1].get("uuid") == job[1].get("uuid"):
+                                action[1]['button_identifier'] = job[1]['button_identifier']
+                                action[1]['identifier_value'] = job[1]['identifier_value']
+                                break
+                        updateFlag = True
                 elif jobType == "InputField" and existingJobType == "InputField":
                     if existingJob[1]['field_identifier'] == job[1]['field_identifier'] and existingJob[1]['identifier_value'] == job[1]['identifier_value'] and existingJob[1]['value'] == job[1]['value']:
-                        return "exists"
-            jobs.append(job)
-            jobsDict[owner] = jobs
+                        self.actions.pop()
+                        return "Job Exists"
+                    else:
+                        existingJob[1]['field_identifier'] = job[1]['field_identifier']
+                        existingJob[1]['identifier_value'] = job[1]['identifier_value']
+                        existingJob[1]['value'] = job[1]['value']
+                        for action in self.actions:
+                            if action[1].get("uuid") == job[1].get("uuid"):
+                                action[1]['field_identifier'] = job[1]['field_identifier']
+                                action[1]['identifier_value'] = job[1]['identifier_value']
+                                action[1]['value'] = job[1]['value']
+                                break
+                        updateFlag = True
+            if not updateFlag:
+                jobs.append(job)
+                jobsDict[owner] = jobs
         else:
             jobs = [job]
             jobsDict[owner] = jobs
         with open("./resources/jobs.json",'w') as f:
             json.dump({"jobs": jobsDict} , f)
-        return "Saved"
-    
+        if updateFlag:
+            self.actions.pop()
+            return "Job Updated"
+        return "Job Saved"
+
     def deleteJob(self, uuid, owner):
         for action in self.actions:
             if action[1].get("uuid") == uuid:
@@ -72,11 +107,11 @@ class abstractScrapeJob:
         url = kwargs.get("url")
         owner = kwargs.get("owner")
         uuid = kwargs.get("uuid")
-        joptype = "GetUrl"
-        job = (getUrlJob,{"url":url, "uuid": uuid, "jobtype": joptype})
+        jobtype = "GetUrl"
+        job = (getUrlJob, {"url":url, "uuid": uuid, "jobtype": jobtype})
         self.actions.append(job)
         self.lastExecuted = False
-        saveResult = self.saveJobIfNotExist(("GetUrl",{"url":url, "uuid": uuid, "jobtype": joptype}), owner)
+        saveResult = self.saveJobIfNotExist(("GetUrl",{"url":url, "uuid": uuid, "jobtype": jobtype}), owner)
         return saveResult
 
     def addInputFieldJob(self, **kwargs):
@@ -86,10 +121,10 @@ class abstractScrapeJob:
         uuid = kwargs.get("uuid")
         joptype = "InputField"
         owner = kwargs.get("owner")
-        job = (inputFieldJob,{"field_identifier":field_identifier,"identifier_value":identifier_value,"value":value, "uuid": uuid, "jobtype": joptype})
+        job = (inputFieldJob, {"field_identifier":field_identifier,"identifier_value":identifier_value,"value":value, "uuid": uuid, "jobtype": joptype})
         self.actions.append(job)
         self.lastExecuted = False
-        saveResult = self.saveJobIfNotExist(("InputField",{"field_identifier":field_identifier,"identifier_value":identifier_value,"value":value, "uuid": uuid, "jobtype": joptype}), owner)
+        saveResult = self.saveJobIfNotExist(("InputField", {"field_identifier":field_identifier,"identifier_value":identifier_value,"value":value, "uuid": uuid, "jobtype": joptype}), owner)
         return saveResult
 
     def addClickButtonJob(self, **kwargs):
@@ -98,10 +133,10 @@ class abstractScrapeJob:
         uuid = kwargs.get("uuid")
         joptype = "ClickButton"
         owner = kwargs.get("owner")
-        job = (clickButtonJob,{"button_identifier":button_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype})
+        job = (clickButtonJob, {"button_identifier":button_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype})
         self.actions.append(job)
         self.lastExecuted = False
-        saveResult = self.saveJobIfNotExist(("ClickButton",{"button_identifier":button_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype}), owner)
+        saveResult = self.saveJobIfNotExist(("ClickButton", {"button_identifier":button_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype}), owner)
         return saveResult
 
     def executeNextAction(self):
@@ -156,13 +191,3 @@ class abstractScrapeJob:
             self.executePosition -= 1
             self.lastExecuted = False
             return result
-
-class zenHrAutomation(abstractScrapeJob):
-    # Identifiers for this scrape job
-    email_field = {"identifierType": "id", "identifierValue": "email"}
-    email_submit_button = {"identifierType": "id", "identifierValue": "submit-email"}
-    password_field = {"identifierType": "id", "identifierValue": "user_password"}
-    login_submit_button = {"identifierType": "text", "identifierValue": "Login"}
-   
-    def __init__(self, driver, **kwargs):
-        super().__init__(driver, **kwargs)

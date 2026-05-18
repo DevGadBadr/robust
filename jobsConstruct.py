@@ -1,8 +1,8 @@
-from PyQt5 import QtWidgets, QtCore, QtGui
+from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtCore import Qt
 from uijobs import Ui_JobsDialog
 from PyQt5.QtWidgets import QDialog
-from scrapeJobsHelpers import JOP_TYPES, IDENTIFIER_VALUES
+from scrapeJobsHelpers import JOB_TYPES, IDENTIFIER_VALUES
 import uuid
 
 class JobsConstruct(Ui_JobsDialog):
@@ -34,8 +34,6 @@ class JobsConstruct(Ui_JobsDialog):
         self.oneJob.deleteLater()
         self.initiateVariables()
         self.connectActions()
-        self.initiateJobTypeOptions(self.jobTypeSelector)
-        self.initiateIdentifierTypeOptions(self.identifierTypeSelector)
         self.initiateSavedJobs(self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].actions)
 
     def initiateSavedJobs(self, actions=None):
@@ -104,12 +102,15 @@ class JobsConstruct(Ui_JobsDialog):
                 checkBox.setChecked(True)
             elif direction == "backward":
                 checkBox.setChecked(False)  
+        if result == "Previous Done":
+            self.setStatusMessage("No more previous actions to execute.")
+            return
         jobWidget = self.groupBox.findChild(QtWidgets.QWidget, "oneJob"+str(jobuuid))
         jobName = jobWidget.findChild(QtWidgets.QLabel)
         self.setStatusMessage(f"{jobName.text()} executed with result: {result}")
 
     def initiateJobTypeOptions(self, comboBox):
-        for jobType in JOP_TYPES.values():
+        for jobType in JOB_TYPES.values():
             comboBox.addItem(jobType)
 
     def initiateIdentifierTypeOptions(self, comboBox):
@@ -123,11 +124,13 @@ class JobsConstruct(Ui_JobsDialog):
 
     def connectActions(self):
         self.addJobButton.clicked.connect(self.addJobHandle)
-        self.jobTypeSelector.currentTextChanged.connect(self.jobTypeChangedHandle)
         self.saveAllButton.clicked.connect(self.saveAllHandle)
         self.deleteJobButton.clicked.connect(self.deleteJobHandle)
         self.nextButton.clicked.connect(self.executeNextAction)
         self.previousButton.clicked.connect(self.executePreviousAction)
+        self.jobsContainer.mousePressEvent = self.handleJobPress
+        self.jobsContainer.mouseMoveEvent = self.handleJobMove
+        self.jobsContainer.mouseReleaseEvent = self.handleJobRelease
 
     def executeNextAction(self):
         func = self.scrapeJobClass.executeNextAction
@@ -147,17 +150,34 @@ class JobsConstruct(Ui_JobsDialog):
         jobuuid = jobWidget.property("uuid")
         self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].deleteJob(uuid=jobuuid, owner=self.jobsFor)
 
-    def jobTypeChangedHandle(self, text):
-        if text == "Get URL":
-            self.identifierTypeSelector.setDisabled(True)
-            self.identifierValueBox.setDisabled(True)
-            self.valueBox.setDisabled(False)
-        elif text == "Click Button":
-            self.valueBox.setDisabled(True)
-        else:
-            self.valueBox.setDisabled(False)
-            self.identifierValueBox.setDisabled(False)
-            self.identifierTypeSelector.setDisabled(False)
+    def handleJobPress(self, event):
+        button = event.button()
+        if button != Qt.LeftButton:
+            return
+        y = event.pos().y()
+        jobs = self.groupBox.findChildren(QtWidgets.QWidget, QtCore.QRegExp("oneJob.*"))
+        for job in jobs:
+            job_y = job.pos().y()
+            job_height = job.size().height()
+            if job_y <= y <= job_y + job_height:
+                jobName = job.findChild(QtWidgets.QLabel)
+                jobName_y = jobName.pos().y()
+                jobName_height = jobName.size().height()
+                if jobName_y <= y <= jobName_y + jobName_height:
+                    job.setCursor(Qt.ClosedHandCursor)
+                    self.setStatusMessage(f"Selected {jobName.text()} for dragging.")
+                    break
+
+    def handleJobMove(self, event):
+        print(event.pos())
+
+    def handleJobRelease(self, event):
+        button = event.button()
+        if button != Qt.LeftButton:
+            return
+        jobs = self.groupBox.findChildren(QtWidgets.QWidget, QtCore.QRegExp("oneJob.*"))
+        for job in jobs:
+            job.setCursor(Qt.ArrowCursor)
 
     def addJobHandle(self):
         if self.newjobflag:
@@ -172,6 +192,7 @@ class JobsConstruct(Ui_JobsDialog):
         jobName = QtWidgets.QLabel(oneJob)
         jobName.setObjectName("jobName"+str(newJobUUID))
         jobName.setMinimumSize(QtCore.QSize(40, 0))
+        jobName.setCursor(Qt.OpenHandCursor)
         oneJobLayout.addWidget(jobName)
         jobTypeSelector = QtWidgets.QComboBox(oneJob)
         jobTypeSelector.setObjectName("jobTypeSelector"+str(newJobUUID))

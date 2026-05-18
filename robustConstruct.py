@@ -9,7 +9,7 @@ from jobsConstruct import JobsConstruct
 from PyQt5.QtCore import QTimer, Qt
 from workerThread import QWorker
 from collections import deque
-from scrapeJobs import APP_URLS, abstractScrapeJob, zenHrAutomation
+from scrapeJobs import APP_URLS, abstractScrapeJob
 
 class RobustConstruct(Ui_RobustDialog):
 
@@ -49,7 +49,7 @@ class RobustConstruct(Ui_RobustDialog):
         self.startButton.clicked.connect(self.createDrivers)
         self.executeAllButton.clicked.connect(self.executeAllDrivers)
 
-    def castSliderChange(self,value):
+    def castSliderChange(self, value):
         self.driverCountLabel.setText(str(value))
         self.numberOfDrivers = value
 
@@ -81,7 +81,7 @@ class RobustConstruct(Ui_RobustDialog):
                     actions.append((clickButtonJob,kwargs))
         return actions
 
-    def handleQThreadStatus(self,event):
+    def handleQThreadStatus(self, event):
         if event['type'] == "driverCreating":
             self.postToUI("status", {"msg": "Creating Driver " + str(self.nextDriverNumber)})
             self.nextDriverNumber += 1
@@ -123,7 +123,7 @@ class RobustConstruct(Ui_RobustDialog):
                 jobSettingsClass = self.worker.driverManager.drivers[event['uuid']]['settingsWindowClass']
                 jobSettingsClass.updateJobExecutionStatus(jobuuid, direction, result)
 
-    def QThreadFinished(self,event):
+    def QThreadFinished(self, event):
         self.startButton.setDisabled(False)
 
     def closeDriverInstance(self,uuid):
@@ -172,11 +172,11 @@ class RobustConstruct(Ui_RobustDialog):
             self.uiUpdateTimer.stop()
 
     def executeAllDrivers(self):
-        for uuid,driver in self.worker.driverManager.drivers.items():
+        for uuid, driver in self.worker.driverManager.drivers.items():
             if not driver['dropped']:
                 pass
 
-    def closeEvent(self,event):
+    def closeEvent(self, event):
         self.worker.driverManager.appClosed = True
         print("App Closed. Closing Drivers.")
         self.uiUpdateTimer.stop()
@@ -186,7 +186,7 @@ class RobustConstruct(Ui_RobustDialog):
         print("All Drivers Closed. Closing App.")
         event.accept()
 
-    def createDriverInstances(self,driverInfo):
+    def createDriverInstances(self, driverInfo):
         number = driverInfo["number"]
         uuid = driverInfo["uuid"]
         driverInstance = QtWidgets.QWidget(self.scrollAreaWidgetContents)

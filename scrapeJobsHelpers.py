@@ -1,6 +1,7 @@
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, ElementNotInteractableException
-JOP_TYPES = {
+from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, ElementNotInteractableException
+
+JOB_TYPES = {
     "geturl": "Get URL",
     "inputfield": "Input Field",
     "clickbutton": "Click Button"
@@ -28,7 +29,10 @@ def inputFieldJob(driver, **kwargs):
     value = kwargs.get("value")
     jobuuid = kwargs.get("uuid")
     direction = kwargs.get("direction", "forward")
-    field = driver.find_element(field_identifier, identifier_value)
+    try:
+        field = driver.find_element(field_identifier, identifier_value)
+    except NoSuchElementException:
+        return "Error: Field not found", jobuuid, direction
     field.clear()
     field.send_keys(value)
     return "Done", jobuuid, direction
@@ -46,4 +50,6 @@ def clickButtonJob(driver, **kwargs):
         button.click()
     except ElementNotInteractableException:
         return "Error: Button not interactable", jobuuid, direction
+    except ElementClickInterceptedException:
+        return "Error: Button click intercepted", jobuuid, direction
     return "Done", jobuuid, direction
