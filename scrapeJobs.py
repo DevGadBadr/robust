@@ -108,10 +108,10 @@ class abstractScrapeJob:
         owner = kwargs.get("owner")
         uuid = kwargs.get("uuid")
         jobtype = "GetUrl"
-        job = (getUrlJob, {"url":url, "uuid": uuid, "jobtype": jobtype})
+        job = (getUrlJob, {"url":url, "uuid": uuid, "jobtype": jobtype, "position":(len(self.actions)-1)})
         self.actions.append(job)
         self.lastExecuted = False
-        saveResult = self.saveJobIfNotExist(("GetUrl",{"url":url, "uuid": uuid, "jobtype": jobtype}), owner)
+        saveResult = self.saveJobIfNotExist(("GetUrl",{"url":url, "uuid": uuid, "jobtype": jobtype, "position":(len(self.actions)-1)}), owner)
         return saveResult
 
     def addInputFieldJob(self, **kwargs):
@@ -121,10 +121,10 @@ class abstractScrapeJob:
         uuid = kwargs.get("uuid")
         joptype = "InputField"
         owner = kwargs.get("owner")
-        job = (inputFieldJob, {"field_identifier":field_identifier,"identifier_value":identifier_value,"value":value, "uuid": uuid, "jobtype": joptype})
+        job = (inputFieldJob, {"field_identifier":field_identifier,"identifier_value":identifier_value,"value":value, "uuid": uuid, "jobtype": joptype, "position":(len(self.actions)-1)})
         self.actions.append(job)
         self.lastExecuted = False
-        saveResult = self.saveJobIfNotExist(("InputField", {"field_identifier":field_identifier,"identifier_value":identifier_value,"value":value, "uuid": uuid, "jobtype": joptype}), owner)
+        saveResult = self.saveJobIfNotExist(("InputField", {"field_identifier":field_identifier,"identifier_value":identifier_value,"value":value, "uuid": uuid, "jobtype": joptype, "position":(len(self.actions)-1)}), owner)
         return saveResult
 
     def addClickButtonJob(self, **kwargs):
@@ -133,10 +133,10 @@ class abstractScrapeJob:
         uuid = kwargs.get("uuid")
         joptype = "ClickButton"
         owner = kwargs.get("owner")
-        job = (clickButtonJob, {"button_identifier":button_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype})
+        job = (clickButtonJob, {"button_identifier":button_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype, "position":(len(self.actions)-1)})
         self.actions.append(job)
         self.lastExecuted = False
-        saveResult = self.saveJobIfNotExist(("ClickButton", {"button_identifier":button_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype}), owner)
+        saveResult = self.saveJobIfNotExist(("ClickButton", {"button_identifier":button_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype, "position":(len(self.actions)-1)}), owner)
         return saveResult
 
     def executeNextAction(self):

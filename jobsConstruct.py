@@ -17,15 +17,6 @@ class JobsConstruct(Ui_JobsDialog):
         self.resetLabelTimer.setInterval(1500)  # Reset label after 3 seconds
         self.resetLabelTimer.timeout.connect(self.resetStatusLabel)
 
-    def resetStatusLabel(self):
-        self.statusLabel.setText(self.jobsFor)
-        self.resetLabelTimer.stop()
-    
-    def setStatusMessage(self, message):
-        self.statusLabel.setText(message)
-        if not self.resetLabelTimer.isActive():
-            self.resetLabelTimer.start()
-
     def setupUi(self, JobsDialog:QDialog):
         super().setupUi(JobsDialog)
         JobsDialog.setWindowFlags(JobsDialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
@@ -35,6 +26,16 @@ class JobsConstruct(Ui_JobsDialog):
         self.initiateVariables()
         self.connectActions()
         self.initiateSavedJobs(self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].actions)
+        # self.jobsContainer.setStyleSheet("QWidget#jobsContainer {border: 1px solid red;}")
+        
+    def resetStatusLabel(self):
+        self.statusLabel.setText(self.jobsFor)
+        self.resetLabelTimer.stop()
+    
+    def setStatusMessage(self, message):
+        self.statusLabel.setText(message)
+        if not self.resetLabelTimer.isActive():
+            self.resetLabelTimer.start()
 
     def initiateSavedJobs(self, actions=None):
         if actions is None:
@@ -96,15 +97,15 @@ class JobsConstruct(Ui_JobsDialog):
         if result == "End of actions":
             self.setStatusMessage("No more actions to execute.")
             return
+        if result == "Previous Done":
+            self.setStatusMessage("No more previous actions to execute.")
+            return
         checkBox = self.groupBox.findChild(QtWidgets.QCheckBox, "doneCheckBox"+str(jobuuid))
         if checkBox:
             if direction == "forward":
                 checkBox.setChecked(True)
             elif direction == "backward":
                 checkBox.setChecked(False)  
-        if result == "Previous Done":
-            self.setStatusMessage("No more previous actions to execute.")
-            return
         jobWidget = self.groupBox.findChild(QtWidgets.QWidget, "oneJob"+str(jobuuid))
         jobName = jobWidget.findChild(QtWidgets.QLabel)
         self.setStatusMessage(f"{jobName.text()} executed with result: {result}")
@@ -121,10 +122,20 @@ class JobsConstruct(Ui_JobsDialog):
         self.nextJobNumber = 1
         self.newjobflag = True
         self.nextsavedjobuuid = None
+        self.draggedJob = None
+        self.previousDragPoint = 0
+        self.currentJobs = []
+        self.dragNextJob = None
+        self.dragPreviousJob = None
+        self.nextJobYLine = 0
+        self.previousJobYLine = 0
+        self.currentActions = []
+        self.draggedAction = None
+        self.dragUUID = None
 
     def connectActions(self):
         self.addJobButton.clicked.connect(self.addJobHandle)
-        self.saveAllButton.clicked.connect(self.saveAllHandle)
+        self.saveOrderButton.clicked.connect(self.saveOrderHandle)
         self.deleteJobButton.clicked.connect(self.deleteJobHandle)
         self.nextButton.clicked.connect(self.executeNextAction)
         self.previousButton.clicked.connect(self.executePreviousAction)
@@ -140,8 +151,8 @@ class JobsConstruct(Ui_JobsDialog):
         func = self.scrapeJobClass.executePreviousAction
         self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['threadQueue'].put((func, {}))
 
-    def saveAllHandle(self):
-        print("Saving all jobs...")
+    def saveOrderHandle(self):
+        print("Saving New Order...")
 
     def deleteJobHandle(self): 
         button = self.groupBox.sender()
@@ -150,34 +161,84 @@ class JobsConstruct(Ui_JobsDialog):
         jobuuid = jobWidget.property("uuid")
         self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].deleteJob(uuid=jobuuid, owner=self.jobsFor)
 
+    def updateDragNextJob(self):
+        draggedJobIndex = self.currentJobs.index(self.draggedJob)
+        self.dragNextJob = self.currentJobs[draggedJobIndex+1] if (draggedJobIndex+1) < len(self.currentJobs) else None
+        self.nextJobYLine = self.dragNextJob.pos().y() + self.dragNextJob.size().height() / 2 if self.dragNextJob else 0
+    
+    def updateDragPreviousJob(self):
+        draggedJobIndex = self.currentJobs.index(self.draggedJob)
+        self.dragPreviousJob = self.currentJobs[draggedJobIndex-1] if (draggedJobIndex-1) > -1 else None
+        self.previousJobYLine = self.dragPreviousJob.pos().y() + self.dragPreviousJob.size().height() / 2 if self.dragPreviousJob else 0
+    
     def handleJobPress(self, event):
         button = event.button()
         if button != Qt.LeftButton:
             return
-        y = event.pos().y()
-        jobs = self.groupBox.findChildren(QtWidgets.QWidget, QtCore.QRegExp("oneJob.*"))
-        for job in jobs:
+        click_y = event.pos().y()
+        self.currentJobs = [self.jobsContainerLayout.itemAt(i).widget() for i in range(self.jobsContainerLayout.count())]
+        self.currentActions = self.scrapeJobClass.actions
+        for job in self.currentJobs:
             job_y = job.pos().y()
             job_height = job.size().height()
-            if job_y <= y <= job_y + job_height:
+            if job_y <= click_y <= job_y + job_height:
                 jobName = job.findChild(QtWidgets.QLabel)
-                jobName_y = jobName.pos().y()
-                jobName_height = jobName.size().height()
-                if jobName_y <= y <= jobName_y + jobName_height:
-                    job.setCursor(Qt.ClosedHandCursor)
-                    self.setStatusMessage(f"Selected {jobName.text()} for dragging.")
-                    break
+                jobName.setCursor(Qt.ClosedHandCursor)
+                self.draggedJob = job
+                self.dragUUID = job.property("uuid")
+                for action in self.currentActions:
+                    if action[1]['uuid'] == self.dragUUID:
+                        self.draggedAction = action
+                self.updateDragNextJob()
+                self.updateDragPreviousJob()
+                self.draggedJob.raise_()
+                self.originalPos = self.draggedJob.pos()
+                break
 
     def handleJobMove(self, event):
-        print(event.pos())
-
+        if len(self.currentActions) < len(self.currentJobs):
+            self.setStatusMessage("Save New Jobs First To Reorder")
+            return
+        drag_y = event.pos().y()
+        direction = (drag_y - self.previousDragPoint) > 0 # True for down move
+        current_pos = self.draggedJob.pos()
+        self.draggedJob.move(current_pos.x(), drag_y - self.draggedJob.height() // 2)
+        if direction:
+            if not self.dragNextJob:
+                self.previousDragPoint = drag_y
+                return
+            if drag_y > self.nextJobYLine:
+                newIndex = self.currentJobs.index(self.dragNextJob)
+                self.jobsContainerLayout.insertWidget(newIndex, self.draggedJob)
+                self.currentActions.pop(self.currentActions.index(self.draggedAction))
+                self.currentActions.insert(newIndex, self.draggedAction)
+                self.currentJobs = [self.jobsContainerLayout.itemAt(i).widget() for i in range(self.jobsContainerLayout.count())]
+                self.updateDragNextJob()
+                self.updateDragPreviousJob()
+        else:
+            if not self.dragPreviousJob:
+                self.previousDragPoint = drag_y
+                return
+            if drag_y < self.previousJobYLine:
+                newIndex = self.currentJobs.index(self.dragPreviousJob)
+                self.jobsContainerLayout.insertWidget(self.currentJobs.index(self.dragPreviousJob), self.draggedJob)
+                self.currentActions.pop(self.currentActions.index(self.draggedAction))
+                self.currentActions.insert(newIndex, self.draggedAction)
+                self.currentJobs = [self.jobsContainerLayout.itemAt(i).widget() for i in range(self.jobsContainerLayout.count())]
+                self.updateDragNextJob()
+                self.updateDragPreviousJob()
+        self.previousDragPoint = drag_y
+            
     def handleJobRelease(self, event):
         button = event.button()
         if button != Qt.LeftButton:
             return
         jobs = self.groupBox.findChildren(QtWidgets.QWidget, QtCore.QRegExp("oneJob.*"))
         for job in jobs:
-            job.setCursor(Qt.ArrowCursor)
+            jobName = job.findChild(QtWidgets.QLabel)
+            jobName.setCursor(Qt.OpenHandCursor)
+        idx = self.currentJobs.index(self.draggedJob)
+        self.jobsContainerLayout.insertWidget(idx, self.draggedJob)
 
     def addJobHandle(self):
         if self.newjobflag:
@@ -190,8 +251,9 @@ class JobsConstruct(Ui_JobsDialog):
         oneJobLayout = QtWidgets.QHBoxLayout(oneJob)
         oneJobLayout.setObjectName("oneJobLayout"+newJobUUID)
         jobName = QtWidgets.QLabel(oneJob)
+        # jobName.setStyleSheet("border:1px solid red;")
         jobName.setObjectName("jobName"+str(newJobUUID))
-        jobName.setMinimumSize(QtCore.QSize(40, 0))
+        jobName.setMinimumSize(QtCore.QSize(40, 30))
         jobName.setCursor(Qt.OpenHandCursor)
         oneJobLayout.addWidget(jobName)
         jobTypeSelector = QtWidgets.QComboBox(oneJob)

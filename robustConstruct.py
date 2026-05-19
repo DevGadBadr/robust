@@ -30,8 +30,14 @@ class RobustConstruct(Ui_RobustDialog):
         self.connectActions()
         self.initiateWorker()
         self.modifyMainDefaultBox()
-        # self.startButton.click()
+        self.loadSettings()
+        self.startButton.click()
 
+    def loadSettings(self):
+        with open("./resources/settings.json","r") as f:
+            settingsFile = json.load(f)
+        if settingsFile.get("isHidden", False):
+            self.hiddenCheckbox.setChecked(True)
 
     def modifyMainDefaultBox(self):
         self.mainDefaultBox.clear()
@@ -48,6 +54,15 @@ class RobustConstruct(Ui_RobustDialog):
         self.slider.valueChanged.connect(self.castSliderChange)
         self.startButton.clicked.connect(self.createDrivers)
         self.executeAllButton.clicked.connect(self.executeAllDrivers)
+        self.hiddenCheckbox.stateChanged.connect(self.handleHiddenCheckboxChange)
+
+    def handleHiddenCheckboxChange(self, state):
+        isHidden = state == Qt.Checked
+        with open("./resources/settings.json","r") as f:
+            settingsFile = json.load(f)
+        settingsFile["isHidden"] = isHidden
+        with open("./resources/settings.json","w") as f:
+            json.dump(settingsFile, f)
 
     def castSliderChange(self, value):
         self.driverCountLabel.setText(str(value))

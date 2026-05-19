@@ -36,9 +36,9 @@
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_2">
          <item>
-          <widget class="QPushButton" name="saveAllButton">
+          <widget class="QPushButton" name="saveOrderButton">
            <property name="text">
-            <string>Save All</string>
+            <string>Save Order</string>
            </property>
           </widget>
          </item>
@@ -121,6 +121,21 @@
           <item>
            <widget class="QWidget" name="jobsContainer" native="true">
             <layout class="QVBoxLayout" name="jobsContainerLayout">
+             <property name="spacing">
+              <number>0</number>
+             </property>
+             <property name="leftMargin">
+              <number>10</number>
+             </property>
+             <property name="topMargin">
+              <number>10</number>
+             </property>
+             <property name="rightMargin">
+              <number>10</number>
+             </property>
+             <property name="bottomMargin">
+              <number>10</number>
+             </property>
              <item>
               <widget class="QWidget" name="oneJob" native="true">
                <property name="minimumSize">
@@ -130,12 +145,27 @@
                 </size>
                </property>
                <layout class="QHBoxLayout" name="onJobLayout">
+                <property name="spacing">
+                 <number>7</number>
+                </property>
+                <property name="leftMargin">
+                 <number>10</number>
+                </property>
+                <property name="topMargin">
+                 <number>10</number>
+                </property>
+                <property name="rightMargin">
+                 <number>10</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>10</number>
+                </property>
                 <item>
                  <widget class="QLabel" name="jobName">
                   <property name="minimumSize">
                    <size>
                     <width>40</width>
-                    <height>0</height>
+                    <height>30</height>
                    </size>
                   </property>
                   <property name="text">
