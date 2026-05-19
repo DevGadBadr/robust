@@ -1,9 +1,10 @@
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtCore import Qt
 from uijobs import Ui_JobsDialog
-from PyQt5.QtWidgets import QDialog
+from PyQt5.QtWidgets import QDialog, QGraphicsOpacityEffect
 from scrapeJobsHelpers import JOB_TYPES, IDENTIFIER_VALUES
 import uuid
+import json
 
 class JobsConstruct(Ui_JobsDialog):
 
@@ -25,8 +26,9 @@ class JobsConstruct(Ui_JobsDialog):
         self.oneJob.deleteLater()
         self.initiateVariables()
         self.connectActions()
-        self.initiateSavedJobs(self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].actions)
+        self.initiateSavedJobs(self.scrapeJobClass.actions)
         # self.jobsContainer.setStyleSheet("QWidget#jobsContainer {border: 1px solid red;}")
+        self.saveOrderButton.setGraphicsEffect(self.opaceEffect)
         
     def resetStatusLabel(self):
         self.statusLabel.setText(self.jobsFor)
@@ -45,6 +47,7 @@ class JobsConstruct(Ui_JobsDialog):
             kwargs = job[1]
             uuid = kwargs.get("uuid")
             self.nextsavedjobuuid = uuid
+            self.initialActions.append(job)
             if kwargs.get("jobtype") == "GetUrl":
                 url = kwargs.get("url")
                 isexecuted = kwargs.get("isexecuted", False)
@@ -132,6 +135,9 @@ class JobsConstruct(Ui_JobsDialog):
         self.currentActions = []
         self.draggedAction = None
         self.dragUUID = None
+        self.initialActions = []
+        self.opaceEffect = QGraphicsOpacityEffect()     
+        self.opaceEffect.setOpacity(0)  
 
     def connectActions(self):
         self.addJobButton.clicked.connect(self.addJobHandle)
@@ -152,14 +158,43 @@ class JobsConstruct(Ui_JobsDialog):
         self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['threadQueue'].put((func, {}))
 
     def saveOrderHandle(self):
-        print("Saving New Order...")
-
+        self.setStatusMessage("Saving Order...")
+        self.saveOrderButton.setEnabled(False)
+        with open("./resources/jobs.json","r") as f:
+            jobsFile = json.load(f)
+        jobsDict:dict = jobsFile['jobs']
+        jobs = jobsDict[self.jobsFor]
+        for job in jobs:
+            for action in self.currentActions:
+                if job[1]['uuid'] == action[1]['uuid']:
+                    job[1]['position'] = self.currentActions.index(action)
+                    break
+        with open("./resources/jobs.json",'w') as f:
+            json.dump({"jobs": jobsDict} , f)
+        jobsWidgets = [self.jobsContainerLayout.itemAt(i).widget() for i in range(self.jobsContainerLayout.count())]
+        for index,jobWidget in enumerate(jobsWidgets):
+            jobName = jobWidget.findChild(QtWidgets.QLabel)
+            jobName.setText(f"Job {index+1}")
+        self.initialActions = []
+        for action in self.currentActions:
+            self.initialActions.append(action)
+        self.setStatusMessage("Current Order Saved")
+        self.opaceEffect.setOpacity(0)
+            
     def deleteJobHandle(self): 
         button = self.groupBox.sender()
         jobWidget = button.parent()
         jobWidget.deleteLater()
         jobuuid = jobWidget.property("uuid")
         self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].deleteJob(uuid=jobuuid, owner=self.jobsFor)
+
+    def evaluateJobsOrderChange(self):
+        if not self.currentActions == self.initialActions:
+            self.opaceEffect.setOpacity(1)
+            self.saveOrderButton.setEnabled(True)
+        else:
+            self.opaceEffect.setOpacity(0)
+            self.saveOrderButton.setEnabled(False)
 
     def updateDragNextJob(self):
         draggedJobIndex = self.currentJobs.index(self.draggedJob)
@@ -215,6 +250,7 @@ class JobsConstruct(Ui_JobsDialog):
                 self.currentJobs = [self.jobsContainerLayout.itemAt(i).widget() for i in range(self.jobsContainerLayout.count())]
                 self.updateDragNextJob()
                 self.updateDragPreviousJob()
+                self.evaluateJobsOrderChange()
         else:
             if not self.dragPreviousJob:
                 self.previousDragPoint = drag_y
@@ -227,6 +263,7 @@ class JobsConstruct(Ui_JobsDialog):
                 self.currentJobs = [self.jobsContainerLayout.itemAt(i).widget() for i in range(self.jobsContainerLayout.count())]
                 self.updateDragNextJob()
                 self.updateDragPreviousJob()
+                self.evaluateJobsOrderChange()
         self.previousDragPoint = drag_y
             
     def handleJobRelease(self, event):

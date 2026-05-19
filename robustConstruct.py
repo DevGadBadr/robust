@@ -88,12 +88,13 @@ class RobustConstruct(Ui_RobustDialog):
             for job in jobs:
                 jobType, kwargs = job
                 kwargs["isexecuted"] = False
+                jobPosition = kwargs['position']
                 if jobType == "GetUrl":
-                    actions.append((getUrlJob,kwargs))
+                    actions.insert(jobPosition, (getUrlJob,kwargs))
                 elif jobType == "InputField":
-                    actions.append((inputFieldJob,kwargs))
+                    actions.insert(jobPosition, (inputFieldJob,kwargs))
                 elif jobType == "ClickButton":
-                    actions.append((clickButtonJob,kwargs))
+                    actions.insert(jobPosition, (clickButtonJob,kwargs))
         return actions
 
     def handleQThreadStatus(self, event):

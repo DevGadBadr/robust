@@ -15,5 +15,9 @@ if __name__ == "__main__":
     mainDialog = QDialog()
     applicationClass = RobustDialog()
     applicationClass.setupUi(mainDialog)
+    screen = QApplication.primaryScreen().geometry()
+    x = screen.width() - mainDialog.width()
+    y = (screen.height() - mainDialog.height() - 100) // 2
+    mainDialog.move(x, y)
     mainDialog.show()
     sys.exit(app.exec())

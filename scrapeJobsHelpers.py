@@ -33,8 +33,11 @@ def inputFieldJob(driver, **kwargs):
         field = driver.find_element(field_identifier, identifier_value)
     except NoSuchElementException:
         return "Error: Field not found", jobuuid, direction
-    field.clear()
-    field.send_keys(value)
+    try:
+        field.clear()
+        field.send_keys(value)
+    except ElementNotInteractableException:
+        return "Error: Field not interactable", jobuuid, direction
     return "Done", jobuuid, direction
 
 def clickButtonJob(driver, **kwargs):
