@@ -200,11 +200,13 @@ class JobsConstruct(Ui_JobsDialog):
         draggedJobIndex = self.currentJobs.index(self.draggedJob)
         self.dragNextJob = self.currentJobs[draggedJobIndex+1] if (draggedJobIndex+1) < len(self.currentJobs) else None
         self.nextJobYLine = self.dragNextJob.pos().y() + self.dragNextJob.size().height() / 2 if self.dragNextJob else 0
+        print(f"Next Job Y Line: {self.nextJobYLine}")
     
     def updateDragPreviousJob(self):
         draggedJobIndex = self.currentJobs.index(self.draggedJob)
         self.dragPreviousJob = self.currentJobs[draggedJobIndex-1] if (draggedJobIndex-1) > -1 else None
         self.previousJobYLine = self.dragPreviousJob.pos().y() + self.dragPreviousJob.size().height() / 2 if self.dragPreviousJob else 0
+        print(f"Previous Job Y Line: {self.previousJobYLine}")
     
     def handleJobPress(self, event):
         button = event.button()
@@ -248,22 +250,26 @@ class JobsConstruct(Ui_JobsDialog):
                 self.currentActions.pop(self.currentActions.index(self.draggedAction))
                 self.currentActions.insert(newIndex, self.draggedAction)
                 self.currentJobs = [self.jobsContainerLayout.itemAt(i).widget() for i in range(self.jobsContainerLayout.count())]
+                self.jobsContainerLayout.activate()
                 self.updateDragNextJob()
                 self.updateDragPreviousJob()
                 self.evaluateJobsOrderChange()
+                print(f"{direction} - Drag Y: {drag_y}, Next Job Y Line: {self.nextJobYLine}, Previous Job Y Line: {self.previousJobYLine}")
         else:
             if not self.dragPreviousJob:
                 self.previousDragPoint = drag_y
                 return
             if drag_y < self.previousJobYLine:
                 newIndex = self.currentJobs.index(self.dragPreviousJob)
-                self.jobsContainerLayout.insertWidget(self.currentJobs.index(self.dragPreviousJob), self.draggedJob)
+                self.jobsContainerLayout.insertWidget(newIndex, self.draggedJob)
                 self.currentActions.pop(self.currentActions.index(self.draggedAction))
                 self.currentActions.insert(newIndex, self.draggedAction)
                 self.currentJobs = [self.jobsContainerLayout.itemAt(i).widget() for i in range(self.jobsContainerLayout.count())]
+                self.jobsContainerLayout.activate()
                 self.updateDragNextJob()
                 self.updateDragPreviousJob()
                 self.evaluateJobsOrderChange()
+                print(f"{direction} - Drag Y: {drag_y}, Previous Job Y Line: {self.previousJobYLine}, Next Job Y Line: {self.nextJobYLine}")
         self.previousDragPoint = drag_y
             
     def handleJobRelease(self, event):

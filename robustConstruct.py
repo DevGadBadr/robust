@@ -10,6 +10,7 @@ from PyQt5.QtCore import QTimer, Qt
 from workerThread import QWorker
 from collections import deque
 from scrapeJobs import APP_URLS, abstractScrapeJob
+from elementSetup import setUpMiddleLine
 
 class RobustConstruct(Ui_RobustDialog):
 
@@ -31,6 +32,7 @@ class RobustConstruct(Ui_RobustDialog):
         self.initiateWorker()
         self.modifyMainDefaultBox()
         self.loadSettings()
+        setUpMiddleLine(self.middleLine1, self)
         self.startButton.click()
 
     def loadSettings(self):
