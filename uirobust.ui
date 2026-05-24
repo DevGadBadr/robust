@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>585</width>
+    <width>633</width>
     <height>700</height>
    </rect>
   </property>
@@ -288,6 +288,9 @@ max-width:300px;</string>
    </item>
    <item>
     <layout class="QVBoxLayout" name="body">
+     <property name="spacing">
+      <number>0</number>
+     </property>
      <item>
       <widget class="QTextBrowser" name="statusArea">
        <property name="enabled">
@@ -303,6 +306,21 @@ max-width:300px;</string>
      </item>
      <item>
       <widget class="Line" name="middleLine1">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>7</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">color:grey</string>
+       </property>
+       <property name="frameShadow">
+        <enum>QFrame::Plain</enum>
+       </property>
+       <property name="lineWidth">
+        <number>1</number>
+       </property>
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
        </property>
@@ -320,8 +338,8 @@ max-width:300px;</string>
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>557</width>
-            <height>190</height>
+            <width>605</width>
+            <height>195</height>
            </rect>
           </property>
           <layout class="QVBoxLayout" name="scrollAreaLayout">
@@ -405,12 +423,16 @@ max-width:300px;</string>
                  <widget class="QPushButton" name="previousButton">
                   <property name="maximumSize">
                    <size>
-                    <width>60</width>
+                    <width>40</width>
                     <height>16777215</height>
                    </size>
                   </property>
                   <property name="text">
-                   <string>&lt;Action</string>
+                   <string/>
+                  </property>
+                  <property name="icon">
+                   <iconset>
+                    <normaloff>resources/previous.svg</normaloff>resources/previous.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -418,12 +440,57 @@ max-width:300px;</string>
                  <widget class="QPushButton" name="nextButton">
                   <property name="maximumSize">
                    <size>
-                    <width>60</width>
+                    <width>40</width>
+                    <height>16777215</height>
+                   </size>
+                  </property>
+                  <property name="font">
+                   <font>
+                    <weight>50</weight>
+                    <bold>false</bold>
+                   </font>
+                  </property>
+                  <property name="text">
+                   <string/>
+                  </property>
+                  <property name="icon">
+                   <iconset>
+                    <normaloff>resources/next.svg</normaloff>resources/next.svg</iconset>
+                  </property>
+                  <property name="checkable">
+                   <bool>false</bool>
+                  </property>
+                  <property name="checked">
+                   <bool>false</bool>
+                  </property>
+                  <property name="autoRepeat">
+                   <bool>false</bool>
+                  </property>
+                  <property name="autoExclusive">
+                   <bool>false</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="eyeButton">
+                  <property name="minimumSize">
+                   <size>
+                    <width>0</width>
+                    <height>0</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>50</width>
                     <height>16777215</height>
                    </size>
                   </property>
                   <property name="text">
-                   <string>Action&gt;</string>
+                   <string/>
+                  </property>
+                  <property name="icon">
+                   <iconset>
+                    <normaloff>resources/eye.svg</normaloff>resources/eye.svg</iconset>
                   </property>
                  </widget>
                 </item>

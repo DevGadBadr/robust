@@ -18,10 +18,11 @@ class JobsConstruct(Ui_JobsDialog):
         self.resetLabelTimer.setInterval(1500)  # Reset label after 3 seconds
         self.resetLabelTimer.timeout.connect(self.resetStatusLabel)
 
-    def setupUi(self, JobsDialog:QDialog):
+    def setupUi(self, JobsDialog:QDialog, driverNumber):
         super().setupUi(JobsDialog)
         JobsDialog.setWindowFlags(JobsDialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         JobsDialog.setWindowFlags(JobsDialog.windowFlags() | Qt.WindowMinimizeButtonHint)
+        JobsDialog.setWindowTitle(f"Driver {driverNumber} Jobs")
         self.statusLabel.setText(self.jobsFor)
         self.oneJob.deleteLater()
         self.initiateVariables()

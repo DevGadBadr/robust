@@ -4,6 +4,10 @@ from PyQt5.QtCore import QObject, pyqtSignal, QTimer
 from collections import deque
 import queue
 from uuid import uuid4
+import psutil
+import win32gui
+import win32process
+import win32con
 
 class DriverManager(QObject):
     drivers:dict = {}
@@ -21,15 +25,17 @@ class DriverManager(QObject):
         self.createQueue = deque()
         
     def createDriver(self, isHidden):
-        print("Creating Driver " + str(self.counter))
         driverUUID = uuid4()
         self.status.emit({"type":"driverCreating","uuid":driverUUID})
         options = webdriver.ChromeOptions()
         if isHidden:
             options.add_argument("--headless")
         driver = webdriver.Chrome(options=options)
+        driverpid = driver.service.process.pid
+        chromePid = self.getChromeWindowPid(driverpid)
+        hwnd = self.findHWND(chromePid) if chromePid else None
         threadQueue = queue.Queue()
-        oneDriver = {"driver":driver,"dropped":False,"threadQueue":threadQueue,"uuid":driverUUID}
+        oneDriver = {"driver":driver,"dropped":False,"threadQueue":threadQueue,"uuid":driverUUID,"pid":driverpid,"chromePid":chromePid,"HWND":hwnd}
         self.drivers[driverUUID] = oneDriver
         if self.appClosed:
             self.createTimer.stop()
@@ -74,3 +80,33 @@ class DriverManager(QObject):
             driverThread.start()
         else:
             self.createTimer.stop()
+
+    def getChromeWindowPid(self, driver_pid):
+        driver_process = psutil.Process(driver_pid)
+        children = driver_process.children(recursive=True)
+        for child in children:
+            if child.name() == "chrome.exe":
+                return child.pid
+        return None
+
+    def findHWND(self, target_pid):
+        # Get all PIDs in the chrome process tree
+        try:
+            proc = psutil.Process(target_pid)
+            all_pids = set([target_pid] + [c.pid for c in proc.children(recursive=True)])
+        except psutil.NoSuchProcess:
+            return None
+        found = []
+        def callback(hwnd, _):
+            if win32gui.GetParent(hwnd) != 0:
+                return
+            _ , pid = win32process.GetWindowThreadProcessId(hwnd)
+            if pid in all_pids:
+                title = win32gui.GetWindowText(hwnd)
+                if title:  # only windows with a title
+                    found.append(hwnd)
+        win32gui.EnumWindows(callback, None)
+        # Return the largest window (most likely the main browser window)
+        if not found:
+            return None
+        return max(found, key=lambda h: win32gui.GetWindowRect(h)[2] * win32gui.GetWindowRect(h)[3])

@@ -11,6 +11,8 @@ from workerThread import QWorker
 from collections import deque
 from scrapeJobs import APP_URLS, abstractScrapeJob
 from elementSetup import setUpMiddleLine
+import win32gui
+import win32con
 
 class RobustConstruct(Ui_RobustDialog):
 
@@ -51,6 +53,7 @@ class RobustConstruct(Ui_RobustDialog):
         self.numberOfDrivers = 1
         self.nextDriverNumber = 1
         self.nextReadyDriverNumber = 1
+        self.nextDriverCount = 1
 
     def connectActions(self):
         self.slider.valueChanged.connect(self.castSliderChange)
@@ -78,7 +81,11 @@ class RobustConstruct(Ui_RobustDialog):
 
     def createDrivers(self):
         self.startButton.setDisabled(True)
+        self.closeAllButton.setDisabled(True)
+        self.executeAllButton.setDisabled(True)
         self.worker.run(self.numberOfDrivers, self.hiddenCheckbox.isChecked())
+        currentInstances = len([driver for driver in self.worker.driverManager.drivers.values() if not driver['dropped']])
+        self.nextDriverCount = currentInstances + 1
 
     def getActionsForScrapeJob(self, defaultScrapeJob):
         with open("./resources/jobs.json","r") as f:
@@ -143,7 +150,9 @@ class RobustConstruct(Ui_RobustDialog):
 
     def QThreadFinished(self, event):
         self.startButton.setDisabled(False)
-
+        self.closeAllButton.setDisabled(False)
+        self.executeAllButton.setDisabled(False)
+        
     def closeDriverInstance(self,uuid):
         driverNumber = self.worker.driverManager.drivers[uuid]['number']
         print("Closing Driver " + str(driverNumber))
@@ -184,6 +193,19 @@ class RobustConstruct(Ui_RobustDialog):
                 self.statusArea.append(event['msg'])
             elif updateType == "createInstance":
                 self.createDriverInstances(event)
+            elif updateType == "focusDriver":
+                hwnd = event['HWND']
+                if hwnd:
+                    win32gui.SetForegroundWindow(hwnd)
+            elif updateType == "showDriver":
+                hwnd = event['HWND']
+                if hwnd:
+                    win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+                    win32gui.SetForegroundWindow(hwnd)
+            elif updateType == "hideDriver":
+                hwnd = event['HWND']
+                if hwnd:
+                    win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
             elif updateType == "cleanStatus":
                 event()
         else:
@@ -204,6 +226,11 @@ class RobustConstruct(Ui_RobustDialog):
         print("All Drivers Closed. Closing App.")
         event.accept()
 
+    def scrollToBottom(self):
+        QTimer.singleShot(0, lambda: self.scrollArea.verticalScrollBar().setValue(
+            self.scrollArea.verticalScrollBar().maximum()
+        ))
+
     def createDriverInstances(self, driverInfo):
         number = driverInfo["number"]
         uuid = driverInfo["uuid"]
@@ -214,12 +241,19 @@ class RobustConstruct(Ui_RobustDialog):
         instanceLayout.setContentsMargins(5, 5, 5, 5)
         instanceLayout.setSpacing(5)
         instanceLayout.setObjectName("instanceLayout"+str(uuid))
+        driverCount = QtWidgets.QLabel(driverInstance)
+        driverCount.setMaximumSize(QtCore.QSize(15, 16777215))
+        driverCount.setObjectName("driverCount"+str(uuid))
+        driverCount.setText(str(self.nextDriverCount))
+        instanceLayout.addWidget(driverCount)
         driverName = QtWidgets.QLabel(driverInstance)
         driverName.setObjectName("driverName"+str(uuid))
         driverName.setText("Driver " + str(number))
+        driverName.setCursor(QtGui.QCursor(Qt.PointingHandCursor))
+        driverName.mousePressEvent = lambda event: self.postToUI("focusDriver", {"HWND": self.worker.driverManager.drivers[uuid]['HWND']})
         instanceLayout.addWidget(driverName)
         driverDefaultUrl = QtWidgets.QComboBox(driverInstance)
-        driverDefaultUrl.setMaximumSize(QtCore.QSize(16777215, 30))
+        driverDefaultUrl.setMaximumSize(QtCore.QSize(150, 30))
         driverDefaultUrl.setObjectName("driverDefaultUrl"+str(uuid))
         for key,value in APP_URLS.items():
             driverDefaultUrl.addItem(key)
@@ -233,7 +267,7 @@ class RobustConstruct(Ui_RobustDialog):
         def controlButtonHandle():
             jobsDialog = QDialog()
             jobsDialogClass = JobsConstruct(self, driverDefaultUrl.currentText(), uuid)
-            jobsDialogClass.setupUi(jobsDialog)
+            jobsDialogClass.setupUi(jobsDialog, self.worker.driverManager.drivers[uuid]['number'])
             self.worker.driverManager.drivers[uuid]['settingsWindow'] = jobsDialog
             self.worker.driverManager.drivers[uuid]['settingsWindowClass'] = jobsDialogClass  
             self.worker.driverManager.drivers[uuid]['settingsWindow'].show()
@@ -245,6 +279,15 @@ class RobustConstruct(Ui_RobustDialog):
             executeClass = self.worker.driverManager.drivers[uuid]['scrapeJobClass']
             func = executeClass.executePreviousAction
             self.worker.driverManager.drivers[uuid]['threadQueue'].put((func,{}))
+        showFlag = True
+        def eyeButtonHandle():
+            nonlocal showFlag
+            if showFlag:
+                self.postToUI("hideDriver", {"HWND": self.worker.driverManager.drivers[uuid]['HWND']})
+                showFlag = False
+            else:
+                self.postToUI("showDriver", {"HWND": self.worker.driverManager.drivers[uuid]['HWND']})
+                showFlag = True
         driverDefaultUrl.currentTextChanged.connect(handleDriverScrapeJobChange)
         driverDefaultUrl.setCurrentText(self.mainDefaultBox.currentText())
         instanceLayout.addWidget(driverDefaultUrl)
@@ -259,17 +302,31 @@ class RobustConstruct(Ui_RobustDialog):
         driverControl.clicked.connect(controlButtonHandle)
         instanceLayout.addWidget(driverControl)
         previousButton = QtWidgets.QPushButton(driverInstance)
-        previousButton.setMaximumSize(QtCore.QSize(60, 16777215))
+        previousButton.setMaximumSize(QtCore.QSize(50, 16777215))
         previousButton.setObjectName("previousButton"+str(uuid))
-        previousButton.setText("<Action")
         previousButton.clicked.connect(previousButtonHandle)
+        previcon = QtGui.QIcon()
+        previcon.addPixmap(QtGui.QPixmap("resources/previous.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        previousButton.setIcon(previcon)
         instanceLayout.addWidget(previousButton)
         nextButton = QtWidgets.QPushButton(driverInstance)
-        nextButton.setMaximumSize(QtCore.QSize(60, 16777215))
+        nextButton.setMaximumSize(QtCore.QSize(50, 16777215))
         nextButton.setObjectName("nextButton"+str(uuid))
-        nextButton.setText("Action>")
         nextButton.clicked.connect(nextButtonHandle)
+        nexticon = QtGui.QIcon()
+        nexticon.addPixmap(QtGui.QPixmap("resources/next.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        nextButton.setIcon(nexticon)
         instanceLayout.addWidget(nextButton)
+        eyeButton = QtWidgets.QPushButton(driverInstance)
+        eyeButton.setMinimumSize(QtCore.QSize(0, 0))
+        eyeButton.setMaximumSize(QtCore.QSize(50, 16777215))
+        eyeButton.setText("")
+        eyeicon = QtGui.QIcon()
+        eyeicon.addPixmap(QtGui.QPixmap("resources/eye.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        eyeButton.setIcon(eyeicon)
+        eyeButton.setObjectName("eyeButton"+str(uuid))
+        eyeButton.clicked.connect(eyeButtonHandle)
+        instanceLayout.addWidget(eyeButton)
         spacerItem1 = QtWidgets.QSpacerItem(10, 20, QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Minimum)
         instanceLayout.addItem(spacerItem1)
         closeDriver = QtWidgets.QPushButton(driverInstance)
@@ -279,3 +336,6 @@ class RobustConstruct(Ui_RobustDialog):
         closeDriver.clicked.connect(lambda:self.closeDriverInstance(uuid))
         instanceLayout.addWidget(closeDriver)
         self.instancesContainerLayout.addWidget(driverInstance)
+        self.nextDriverCount += 1
+        self.scrollAreaLayout.activate()
+        self.scrollToBottom()
