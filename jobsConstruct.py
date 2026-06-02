@@ -32,8 +32,9 @@ class JobsConstruct(Ui_JobsDialog):
         self.saveOrderButton.setGraphicsEffect(self.opaceEffect)
         
     def resetStatusLabel(self):
-        self.statusLabel.setText(self.jobsFor)
-        self.resetLabelTimer.stop()
+        if self.statusLabel:
+            self.statusLabel.setText(self.jobsFor)
+            self.resetLabelTimer.stop()
     
     def setStatusMessage(self, message):
         self.statusLabel.setText(message)

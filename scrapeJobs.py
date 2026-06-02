@@ -167,6 +167,7 @@ class abstractScrapeJob:
                     kwargs['direction'] = "forward"
                     result = function(self.driver, **kwargs)
                     self.lastExecuted = True
+                    self.executePosition = len(self.actions)
                     print(self.executePosition, actionsLength, self.lastExecuted, "last")
                     return result
                 self.executePosition = len(self.actions)
