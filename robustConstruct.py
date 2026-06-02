@@ -10,7 +10,7 @@ from jobsConstruct import JobsConstruct
 from PyQt5.QtCore import QTimer, Qt
 from workerThread import QWorker
 from collections import deque
-from scrapeJobs import APP_URLS, abstractScrapeJob
+from scrapeJobs import abstractScrapeJob
 from elementSetup import setUpMiddleLine
 import win32gui
 import win32con
@@ -33,10 +33,18 @@ class RobustConstruct(Ui_RobustDialog):
         self.initiateVariables()
         self.connectActions()
         self.initiateWorker()
+        self.loadExistingJobs()
         self.modifyMainDefaultBox()
         self.loadSettings()
         setUpMiddleLine(self.middleLine1, self)
         self.startButton.click()
+
+    def loadExistingJobs(self):
+        with open("./resources/jobs.json", "r") as f:
+            existingJobs = json.load(f)
+        self.existJobs = []
+        for job in existingJobs['jobs'].keys():
+            self.existJobs.append(job)
 
     def loadSettings(self):
         with open("./resources/settings.json","r") as f:
@@ -48,15 +56,15 @@ class RobustConstruct(Ui_RobustDialog):
 
     def modifyMainDefaultBox(self):
         self.mainDefaultBox.clear()
-        for key,value in APP_URLS.items():
-            self.mainDefaultBox.addItem(key)
-            self.mainDefaultBox.setItemData(self.mainDefaultBox.count()-1, value)
+        for job in self.existJobs:
+            self.mainDefaultBox.addItem(job)
 
     def initiateVariables(self):
         self.numberOfDrivers = 1
         self.nextDriverNumber = 1
         self.nextReadyDriverNumber = 1
         self.nextDriverCount = 1
+        self.addNewJobDialog = None
 
     def connectActions(self):
         self.slider.valueChanged.connect(self.castSliderChange)
@@ -68,7 +76,7 @@ class RobustConstruct(Ui_RobustDialog):
 
     def openAddJobDialog(self):
         self.addNewJobDialog = QDialog()
-        self.newJobDialogClass = NewJobConstruct()
+        self.newJobDialogClass = NewJobConstruct(self)
         self.newJobDialogClass.setupUi(self.addNewJobDialog)
         self.addNewJobDialog.show()
 
@@ -276,13 +284,13 @@ class RobustConstruct(Ui_RobustDialog):
         driverDefaultUrl = QtWidgets.QComboBox(driverInstance)
         driverDefaultUrl.setMaximumSize(QtCore.QSize(150, 30))
         driverDefaultUrl.setObjectName("driverDefaultUrl"+str(uuid))
-        for key,value in APP_URLS.items():
-            driverDefaultUrl.addItem(key)
-            driverDefaultUrl.setItemData(driverDefaultUrl.count()-1, value)
+        for job in self.existJobs:
+            driverDefaultUrl.addItem(job)
         def handleDriverScrapeJobChange(event):
             print(event)
             scrapeJobClass = abstractScrapeJob(self.worker.driverManager.drivers[uuid]['driver'])
             actions = self.getActionsForScrapeJob(driverDefaultUrl.currentText())
+            print(actions)
             scrapeJobClass.initiateActions(actions)
             self.worker.driverManager.drivers[uuid]['scrapeJobClass'] = scrapeJobClass
         def controlButtonHandle():

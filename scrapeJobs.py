@@ -1,13 +1,3 @@
-APP_URLS = {
-    "Google":"https://www.google.com",
-    "Facebook":"https://www.facebook.com",
-    "YouTube":"https://www.youtube.com",
-    "TikTok":"https://www.tiktok.com",
-    "Instagram":"https://www.instagram.com",
-    "X":"https://www.x.com",
-    "ZenHR":"https://app.zenhr.com/en/users/pre_login"
-}
-
 import json
 from scrapeJobsHelpers import getUrlJob, inputFieldJob, clickButtonJob
 

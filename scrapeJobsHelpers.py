@@ -1,5 +1,5 @@
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, ElementNotInteractableException
+from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, ElementNotInteractableException, WebDriverException
 
 JOB_TYPES = {
     "geturl": "Get URL",
@@ -20,7 +20,10 @@ def getUrlJob(driver, **kwargs):
     url = kwargs.get("url")
     jobuuid = kwargs.get("uuid")
     direction = kwargs.get("direction", "forward")
-    driver.get(url)
+    try:
+        driver.get(url)
+    except WebDriverException:
+        return "Error: Unable to navigate to URL", jobuuid, direction
     return "Done", jobuuid, direction
 
 def inputFieldJob(driver, **kwargs):

@@ -157,7 +157,7 @@
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout_3">
      <item>
-      <widget class="QPushButton" name="addButotn">
+      <widget class="QPushButton" name="addButton">
        <property name="text">
         <string>Add</string>
        </property>
@@ -173,7 +173,18 @@
     </layout>
    </item>
    <item>
-    <widget class="QTextBrowser" name="existJobsArea"/>
+    <widget class="QListWidget" name="existJobsList"/>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_4">
+     <item>
+      <widget class="QPushButton" name="removeButton">
+       <property name="text">
+        <string>Remove</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>
