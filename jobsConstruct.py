@@ -1,6 +1,6 @@
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtCore import Qt
-from uijobs import Ui_JobsDialog
+from ui.uijobs import Ui_JobsDialog
 from PyQt5.QtWidgets import QDialog, QGraphicsOpacityEffect
 from scrapeJobsHelpers import JOB_TYPES, IDENTIFIER_VALUES
 import uuid

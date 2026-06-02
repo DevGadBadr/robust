@@ -24,16 +24,18 @@ class DriverManager(QObject):
         self.createTimer.timeout.connect(self.processNextDriverCreate)
         self.createQueue = deque()
         
-    def createDriver(self, isHidden):
+    def createDriver(self, isHeadless, isHidden):
         driverUUID = uuid4()
         self.status.emit({"type":"driverCreating","uuid":driverUUID})
         options = webdriver.ChromeOptions()
-        if isHidden:
+        if isHeadless:
             options.add_argument("--headless")
         driver = webdriver.Chrome(options=options)
         driverpid = driver.service.process.pid
         chromePid = self.getChromeWindowPid(driverpid)
         hwnd = self.findHWND(chromePid) if chromePid else None
+        if isHidden:
+            win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
         threadQueue = queue.Queue()
         oneDriver = {"driver":driver,"dropped":False,"threadQueue":threadQueue,"uuid":driverUUID,"pid":driverpid,"chromePid":chromePid,"HWND":hwnd}
         self.drivers[driverUUID] = oneDriver
@@ -63,10 +65,10 @@ class DriverManager(QObject):
                 self.status.emit({"type":"driverResult", "result":result, "uuid":driverUUID, "jobuuid": jobuuid, "direction": direction})
             threadQueue.task_done()
 
-    def constructDrivers(self, count, isHidden):
+    def constructDrivers(self, count, isHeadless, isHidden):
         self.createTimer.start()
         for _ in range(count):
-            driverThread = threading.Thread(target=self.createDriver, args=(isHidden,))
+            driverThread = threading.Thread(target=self.createDriver, args=(isHeadless,isHidden,))
             self.threads.append(driverThread)
             self.createQueue.append(driverThread)
             self.counter += 1

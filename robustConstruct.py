@@ -4,7 +4,8 @@ from PyQt5 import QtWidgets
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QDialog
 from scrapeJobsHelpers import clickButtonJob, getUrlJob, inputFieldJob
-from uirobust import Ui_RobustDialog
+from ui.uirobust import Ui_RobustDialog
+from newJobConstruct import NewJobConstruct
 from jobsConstruct import JobsConstruct
 from PyQt5.QtCore import QTimer, Qt
 from workerThread import QWorker
@@ -41,7 +42,9 @@ class RobustConstruct(Ui_RobustDialog):
         with open("./resources/settings.json","r") as f:
             settingsFile = json.load(f)
         if settingsFile.get("isHidden", False):
-            self.hiddenCheckbox.setChecked(True)
+            self.headlessCheckbox.setChecked(True)
+        if settingsFile.get("isVisible", False):
+            self.hiddenCheckBox.setChecked(True)
 
     def modifyMainDefaultBox(self):
         self.mainDefaultBox.clear()
@@ -59,9 +62,25 @@ class RobustConstruct(Ui_RobustDialog):
         self.slider.valueChanged.connect(self.castSliderChange)
         self.startButton.clicked.connect(self.createDrivers)
         self.executeAllButton.clicked.connect(self.executeAllDrivers)
-        self.hiddenCheckbox.stateChanged.connect(self.handleHiddenCheckboxChange)
+        self.headlessCheckbox.stateChanged.connect(self.handleHeadlessCheckboxChange)
+        self.hiddenCheckBox.stateChanged.connect(self.handleHiddenCheckboxChange)
+        self.addScrapeJobButton.clicked.connect(self.openAddJobDialog)
+
+    def openAddJobDialog(self):
+        self.addNewJobDialog = QDialog()
+        self.newJobDialogClass = NewJobConstruct()
+        self.newJobDialogClass.setupUi(self.addNewJobDialog)
+        self.addNewJobDialog.show()
 
     def handleHiddenCheckboxChange(self, state):
+        isVisible = state == Qt.Checked
+        with open("./resources/settings.json","r") as f:
+            settingsFile = json.load(f)
+        settingsFile["isVisible"] = isVisible
+        with open("./resources/settings.json","w") as f:
+            json.dump(settingsFile, f)
+
+    def handleHeadlessCheckboxChange(self, state):
         isHidden = state == Qt.Checked
         with open("./resources/settings.json","r") as f:
             settingsFile = json.load(f)
@@ -83,7 +102,7 @@ class RobustConstruct(Ui_RobustDialog):
         self.startButton.setDisabled(True)
         self.closeAllButton.setDisabled(True)
         self.executeAllButton.setDisabled(True)
-        self.worker.run(self.numberOfDrivers, self.hiddenCheckbox.isChecked())
+        self.worker.run(self.numberOfDrivers, self.headlessCheckbox.isChecked(), self.hiddenCheckBox.isChecked())
         currentInstances = len([driver for driver in self.worker.driverManager.drivers.values() if not driver['dropped']])
         self.nextDriverCount = currentInstances + 1
 
@@ -153,7 +172,7 @@ class RobustConstruct(Ui_RobustDialog):
         self.closeAllButton.setDisabled(False)
         self.executeAllButton.setDisabled(False)
         
-    def closeDriverInstance(self,uuid):
+    def closeDriverInstance(self, uuid):
         driverNumber = self.worker.driverManager.drivers[uuid]['number']
         print("Closing Driver " + str(driverNumber))
         self.worker.driverManager.drivers[uuid]['threadQueue'].put("close")
@@ -167,7 +186,7 @@ class RobustConstruct(Ui_RobustDialog):
 
     def closeAllDrivers(self):
         print("Closing All Drivers")
-        for uuid,driver in self.worker.driverManager.drivers.items():
+        for uuid, driver in self.worker.driverManager.drivers.items():
             if not driver['dropped']:
                 self.closeDriverInstance(uuid)
                 if 'settingsWindow' in self.worker.driverManager.drivers[uuid].keys():
@@ -224,6 +243,8 @@ class RobustConstruct(Ui_RobustDialog):
         print("Closing Remaining Drivers.")
         self.closeAllDrivers()
         print("All Drivers Closed. Closing App.")
+        if self.addNewJobDialog:
+            self.addNewJobDialog.close()
         event.accept()
 
     def scrollToBottom(self):
@@ -279,7 +300,7 @@ class RobustConstruct(Ui_RobustDialog):
             executeClass = self.worker.driverManager.drivers[uuid]['scrapeJobClass']
             func = executeClass.executePreviousAction
             self.worker.driverManager.drivers[uuid]['threadQueue'].put((func,{}))
-        showFlag = True
+        showFlag = not self.hiddenCheckBox.isChecked()
         def eyeButtonHandle():
             nonlocal showFlag
             if showFlag:

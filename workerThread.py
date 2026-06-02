@@ -5,5 +5,5 @@ class QWorker(QThread):
 
     driverManager = DriverManager()
 
-    def run(self,driversCount, isHidden):
-        self.driverManager.constructDrivers(driversCount, isHidden)
+    def run(self,driversCount, isHeadless, isHidden):
+        self.driverManager.constructDrivers(driversCount, isHeadless, isHidden)

@@ -19,8 +19,6 @@ def setUpMiddleLine(middleLine: QWidget, robustClass):
         else:          # dragging up → statusArea shrinks, scrollArea grows
             allowed = -(statusArea.size().height() - minHeight)
             delta = max(delta, allowed)
-        if delta == 0:
-            return
         scrollArea.resize(scrollArea.width(), scrollArea.height() - delta)
         scrollArea.move(scrollArea.pos().x(), scrollArea.pos().y() + delta)
         statusArea.resize(statusArea.width(), statusArea.height() + delta)

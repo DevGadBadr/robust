@@ -205,9 +205,19 @@
       </widget>
      </item>
      <item>
-      <widget class="QCheckBox" name="hiddenCheckbox">
+      <widget class="QCheckBox" name="headlessCheckbox">
+       <property name="text">
+        <string>Headless</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="hiddenCheckBox">
        <property name="text">
         <string>Hidden</string>
+       </property>
+       <property name="checked">
+        <bool>false</bool>
        </property>
       </widget>
      </item>
@@ -223,6 +233,17 @@
         </size>
        </property>
       </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="addScrapeJobButton">
+       <property name="text">
+        <string/>
+       </property>
+       <property name="icon">
+        <iconset>
+         <normaloff>../resources/add.svg</normaloff>../resources/add.svg</iconset>
+       </property>
+      </widget>
      </item>
     </layout>
    </item>
@@ -339,7 +360,7 @@ max-width:300px;</string>
             <x>0</x>
             <y>0</y>
             <width>605</width>
-            <height>195</height>
+            <height>191</height>
            </rect>
           </property>
           <layout class="QVBoxLayout" name="scrollAreaLayout">
