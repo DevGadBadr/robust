@@ -112,6 +112,21 @@ class JobsConstruct(Ui_JobsDialog):
                 identifierValueBox.setText(identifierValue)
                 doneCheckBox = lastJobWidget.findChild(QtWidgets.QCheckBox, "doneCheckBox"+str(uuid))
                 doneCheckBox.setChecked(isexecuted)
+            elif kwargs.get("jobtype") == "ExtractLinks":
+                identifierType = kwargs.get("link_identifier")
+                identifierValue = kwargs.get("identifier_value")
+                isexecuted = kwargs.get("isexecuted", False)
+                self.addJobHandle()
+                lastJobWidget = self.groupBox.findChild(QtWidgets.QWidget, "oneJob"+str(uuid))
+                lastJobWidget.setProperty("uuid", uuid)
+                jobTypeSelector = lastJobWidget.findChild(QtWidgets.QComboBox, "jobTypeSelector"+str(uuid))
+                jobTypeSelector.setCurrentText("Extract Links")
+                identifierTypeSelector = lastJobWidget.findChild(QtWidgets.QComboBox, "identifierTypeSelector"+str(uuid))
+                identifierTypeSelector.setCurrentIndex(identifierTypeSelector.findData(identifierType))
+                identifierValueBox = lastJobWidget.findChild(QtWidgets.QLineEdit, "identifierValueBox"+str(uuid))
+                identifierValueBox.setText(identifierValue)
+                doneCheckBox = lastJobWidget.findChild(QtWidgets.QCheckBox, "doneCheckBox"+str(uuid))
+                doneCheckBox.setChecked(isexecuted)
         self.newjobflag = True
 
     def updateJobExecutionStatus(self, jobuuid, direction, result):
@@ -231,14 +246,20 @@ class JobsConstruct(Ui_JobsDialog):
         button = self.groupBox.sender()
         jobWidget = button.parent()
         jobuuid = jobWidget.property("uuid")
-        scraped_text = ""
+        content = ""
         if jobuuid:
             for action in self.scrapeJobClass.actions:
                 if action[1].get("uuid") == jobuuid:
-                    scraped_text = action[1].get("scraped_text", "")
+                    artifact = action[1].get("artifact")
+                    if isinstance(artifact, list):
+                        content = "\n".join(artifact)
+                    elif artifact:
+                        content = artifact
+                    else:
+                        content = ""
                     break
         self.jobContentDialog = QDialog()
-        self.jobContentDialogClass = JobContentConstruct(scraped_text)
+        self.jobContentDialogClass = JobContentConstruct(content)
         self.jobContentDialogClass.setupUi(self.jobContentDialog)
         self.jobContentDialog.show()
 
@@ -306,7 +327,6 @@ class JobsConstruct(Ui_JobsDialog):
                 self.updateDragNextJob()
                 self.updateDragPreviousJob()
                 self.evaluateJobsOrderChange()
-                print(f"{direction} - Drag Y: {drag_y}, Next Job Y Line: {self.nextJobYLine}, Previous Job Y Line: {self.previousJobYLine}")
         else:
             if not self.dragPreviousJob:
                 self.previousDragPoint = drag_y
@@ -321,7 +341,6 @@ class JobsConstruct(Ui_JobsDialog):
                 self.updateDragNextJob()
                 self.updateDragPreviousJob()
                 self.evaluateJobsOrderChange()
-                print(f"{direction} - Drag Y: {drag_y}, Previous Job Y Line: {self.previousJobYLine}, Next Job Y Line: {self.nextJobYLine}")
         self.previousDragPoint = drag_y
             
     def handleJobRelease(self, event):
@@ -422,6 +441,15 @@ class JobsConstruct(Ui_JobsDialog):
                     doneCheckBox.setObjectName("doneCheckBox"+str(newJobUUID))
                     saveMsg = self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addExtractTextJob(text_identifier=identifierType, identifier_value=identifierValue, owner=self.jobsFor, uuid=newJobUUID)
                     self.setStatusMessage(saveMsg)
+            elif jobType == "Extract Links":
+                if not identifierType or not identifierValue:
+                    self.setStatusMessage("Please fill in all required fields for Extract Links job.")
+                    return
+                else:
+                    oneJob.setProperty("uuid", newJobUUID)
+                    doneCheckBox.setObjectName("doneCheckBox"+str(newJobUUID))
+                    saveMsg = self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addExtractLinksJob(link_identifier=identifierType, identifier_value=identifierValue, owner=self.jobsFor, uuid=newJobUUID)
+                    self.setStatusMessage(saveMsg)
         saveJobButton.clicked.connect(saveJobHandle)
         oneJobLayout.addWidget(saveJobButton)
         deleteJobButton = QtWidgets.QPushButton(oneJob)
@@ -444,7 +472,7 @@ class JobsConstruct(Ui_JobsDialog):
                 identifierTypeSelector.setDisabled(False)
                 identifierValueBox.setDisabled(False)
                 self.removeArtifactButton(oneJob, newJobUUID)
-            elif text == "Extract Text":
+            elif text == "Extract Text" or text == "Extract Links":
                 valueBox.setDisabled(True)
                 identifierTypeSelector.setDisabled(False)
                 identifierValueBox.setDisabled(False)

@@ -2,7 +2,7 @@ import json
 from PyQt5 import QtWidgets
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QDialog
-from scrapeJobsHelpers import clickButtonJob, getUrlJob, inputFieldJob, extractTextJob
+from scrapeJobsHelpers import clickButtonJob, getUrlJob, inputFieldJob, extractTextJob, extractLinksJob
 from ui.uirobust import Ui_RobustDialog
 from newJobConstruct import NewJobConstruct
 from jobsConstruct import JobsConstruct
@@ -28,14 +28,16 @@ class RobustConstruct(Ui_RobustDialog):
         RobustDialog.setWindowFlags(RobustDialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         RobustDialog.setWindowFlags(RobustDialog.windowFlags() | Qt.WindowMinimizeButtonHint)
         RobustDialog.closeEvent = self.closeEvent
+        self.intitializing = True
         self.driverInstancePlaceHolder.deleteLater()
         self.initiateVariables()
         self.connectActions()
         self.initiateWorker()
         self.loadExistingJobs()
-        self.modifyMainDefaultBox()
         self.loadSettings()
+        self.modifyMainDefaultBox()
         setUpMiddleLine(self.middleLine1, self)
+        self.intitializing = False
         self.startButton.click()
 
     def loadExistingJobs(self):
@@ -52,11 +54,14 @@ class RobustConstruct(Ui_RobustDialog):
             self.headlessCheckbox.setChecked(True)
         if settingsFile.get("isVisible", False):
             self.hiddenCheckBox.setChecked(True)
+        self.latestJob = settingsFile.get("latestJob","")
 
     def modifyMainDefaultBox(self):
         self.mainDefaultBox.clear()
         for job in self.existJobs:
             self.mainDefaultBox.addItem(job)
+        if self.latestJob in self.existJobs:
+            self.mainDefaultBox.setCurrentText(self.latestJob)
 
     def initiateVariables(self):
         self.numberOfDrivers = 1
@@ -72,6 +77,15 @@ class RobustConstruct(Ui_RobustDialog):
         self.headlessCheckbox.stateChanged.connect(self.handleHeadlessCheckboxChange)
         self.hiddenCheckBox.stateChanged.connect(self.handleHiddenCheckboxChange)
         self.addScrapeJobButton.clicked.connect(self.openAddJobDialog)
+        self.mainDefaultBox.currentTextChanged.connect(self.handleMainJobChange)
+
+    def handleMainJobChange(self):
+        if not self.intitializing:
+            with open("./resources/settings.json") as file:
+                settings = json.load(file)
+            settings["latestJob"] = self.mainDefaultBox.currentText()
+            with open("./resources/settings.json","w") as file:
+                json.dump(settings,file) 
 
     def openAddJobDialog(self):
         self.addNewJobDialog = QDialog()
@@ -132,6 +146,8 @@ class RobustConstruct(Ui_RobustDialog):
                     actions.insert(jobPosition, (clickButtonJob,kwargs))
                 elif jobType == "ExtractText":
                     actions.insert(jobPosition, (extractTextJob,kwargs))
+                elif jobType == "ExtractLinks":
+                    actions.insert(jobPosition, (extractLinksJob,kwargs))
         return actions
 
     def handleQThreadStatus(self, event):
@@ -163,19 +179,26 @@ class RobustConstruct(Ui_RobustDialog):
             jobuuid = event['jobuuid']
             direction = event['direction']
             result = event['result']
+            artifact = event.get("artifact")
             executeClass = self.worker.driverManager.drivers[event['uuid']]['scrapeJobClass']
             actions = executeClass.actions
             for action in actions:
                 if action[1].get("uuid") == jobuuid:
+                    jobtype = action[1].get("jobtype")
+                    is_extract = jobtype in ("ExtractText", "ExtractLinks")
                     if direction == "forward":
                         action[1]['isexecuted'] = True
-                        if action[1].get("jobtype") == "ExtractText" and not str(result).startswith("Error:"):
-                            action[1]['scraped_text'] = result
+                        if is_extract and not str(result).startswith("Error:"):
+                            action[1]['artifact'] = artifact
                             result = "Extracted Successfully"
                     elif direction == "backward":
                         action[1]['isexecuted'] = False
-                        if action[1].get("jobtype") == "ExtractText":
-                            action[1].pop('scraped_text', None)
+                        if is_extract:
+                            existing = action[1].pop('artifact', None)
+                            if existing:
+                                result = "Content removed"
+                            else:
+                                result = "No content to remove"
                     break
             if "settingsWindowClass" in self.worker.driverManager.drivers[event['uuid']].keys():
                 jobSettingsClass = self.worker.driverManager.drivers[event['uuid']]['settingsWindowClass']

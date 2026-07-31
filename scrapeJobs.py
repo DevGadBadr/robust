@@ -1,5 +1,5 @@
 import json
-from scrapeJobsHelpers import getUrlJob, inputFieldJob, clickButtonJob, extractTextJob
+from scrapeJobsHelpers import getUrlJob, inputFieldJob, clickButtonJob, extractTextJob, extractLinksJob
 
 class abstractScrapeJob:
     def __init__(self, driver):
@@ -82,6 +82,21 @@ class abstractScrapeJob:
                             existingJob[1]['text_identifier'] = job[1]['text_identifier']
                             existingJob[1]['identifier_value'] = job[1]['identifier_value']
                             existAction[1]['text_identifier'] = job[1]['text_identifier']
+                            existAction[1]['identifier_value'] = job[1]['identifier_value']
+                            updateFlag = True
+                    if jobType == "ExtractLinks":
+                        if existingJob[1]['link_identifier'] == job[1]['link_identifier'] and existingJob[1]['identifier_value'] == job[1]['identifier_value']:
+                            self.actions.pop()
+                            return "Job Exists"
+                        else:
+                            # Find Related Action
+                            for action in self.actions:
+                                if action[1]['uuid'] == jobuuid:
+                                    existAction = action
+                                    break
+                            existingJob[1]['link_identifier'] = job[1]['link_identifier']
+                            existingJob[1]['identifier_value'] = job[1]['identifier_value']
+                            existAction[1]['link_identifier'] = job[1]['link_identifier']
                             existAction[1]['identifier_value'] = job[1]['identifier_value']
                             updateFlag = True
                     break
@@ -167,6 +182,18 @@ class abstractScrapeJob:
         saveResult = self.saveJobIfNotExist(("ExtractText", {"text_identifier":text_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype, "position":(len(self.actions)-1)}), owner)
         return saveResult
 
+    def addExtractLinksJob(self, **kwargs):
+        link_identifier = kwargs.get("link_identifier")
+        identifier_value = kwargs.get("identifier_value")
+        uuid = kwargs.get("uuid")
+        joptype = "ExtractLinks"
+        owner = kwargs.get("owner")
+        job = (extractLinksJob, {"link_identifier":link_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype, "position":(len(self.actions))})
+        self.actions.append(job)
+        self.lastExecuted = False
+        saveResult = self.saveJobIfNotExist(("ExtractLinks", {"link_identifier":link_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype, "position":(len(self.actions)-1)}), owner)
+        return saveResult
+
     def executeNextAction(self):
         actionsLength = len(self.actions)
         if actionsLength == 1:
@@ -188,7 +215,7 @@ class abstractScrapeJob:
                     print(self.executePosition, actionsLength, self.lastExecuted, "last")
                     return result
                 self.executePosition = len(self.actions)
-                return "End of actions", "end", "forward"
+                return "End of actions", "end", "forward", None
             function, kwargs = self.actions[self.executePosition]
             kwargs['direction'] = "forward"
             result = function(self.driver, **kwargs)
@@ -202,7 +229,7 @@ class abstractScrapeJob:
         if actionsLength == 1:
             self.driver.back()
             self.lastExecuted = False
-            return "Previous Done", "back", "backward"
+            return "Previous Done", "back", "backward", None
         if actionsLength > 1:
             if self.executePosition == 0:
                 if not self.firstExecuted:
@@ -213,7 +240,7 @@ class abstractScrapeJob:
                     return result
                 else:
                     self.driver.back()
-                    return "Previous Done", "back", "backward"
+                    return "Previous Done", "back", "backward", None
             function, kwargs = self.actions[self.executePosition-1]
             kwargs['direction'] = "backward"
             result = function(self.driver, **kwargs)

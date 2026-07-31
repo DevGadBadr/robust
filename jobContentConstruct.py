@@ -4,9 +4,9 @@ from PyQt5.QtWidgets import QApplication
 
 
 class JobContentConstruct(Ui_jobContentDialog):
-    def __init__(self, scraped_text=""):
+    def __init__(self, content=""):
         super().__init__()
-        self.scraped_text = scraped_text
+        self.content = content
 
     def setupUi(self, jobContentDialog):
         super().setupUi(jobContentDialog)
@@ -14,7 +14,7 @@ class JobContentConstruct(Ui_jobContentDialog):
         jobContentDialog.setWindowFlags(jobContentDialog.windowFlags() | Qt.WindowMinimizeButtonHint)
         jobContentDialog.setWindowTitle("Content")
         self.dialog = jobContentDialog
-        self.textBrowser.setPlainText(self.scraped_text if self.scraped_text else "No content yet")
+        self.textBrowser.setPlainText(self.content if self.content else "No content yet")
         self.connectActions()
 
     def connectActions(self):

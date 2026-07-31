@@ -61,8 +61,8 @@ class DriverManager(QObject):
             if func == "assignNumber":
                 driver.execute_script("document.title = 'Driver " + str(kwargs['number']) + "'")
             else:
-                result, jobuuid, direction = func()
-                self.status.emit({"type":"driverResult", "result":result, "uuid":driverUUID, "jobuuid": jobuuid, "direction": direction})
+                result, jobuuid, direction, artifact = func()
+                self.status.emit({"type":"driverResult", "result":result, "artifact":artifact, "uuid":driverUUID, "jobuuid": jobuuid, "direction": direction})
             threadQueue.task_done()
 
     def constructDrivers(self, count, isHeadless, isHidden):
