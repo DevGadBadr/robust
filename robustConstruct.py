@@ -57,6 +57,7 @@ class RobustConstruct(Ui_RobustMain):
             self.hiddenCheckBox.setChecked(True)
         self.latestJob = settingsFile.get("latestJob","")
         self.controlPanelWidth = settingsFile.get("controlPanelWidth", 500)
+        self.statusAreaHeight = settingsFile.get("statusAreaHeight", 200)
         self.windowX = settingsFile.get("windowX", 0)
         self.windowY = settingsFile.get("windowY", 0)
         self.windowWidth = settingsFile.get("windowWidth", 1020)
@@ -69,6 +70,9 @@ class RobustConstruct(Ui_RobustMain):
             self.mainWindow.showMaximized()
         else:
             self.mainWindow.show()
+        # Re-apply after show so sizes aren't clamped against the pre-show height
+        QTimer.singleShot(0, self.applyVerticalSizes)
+        QTimer.singleShot(0, self.applyHorizontalSizes)
 
     def modifyMainDefaultBox(self):
         self.mainDefaultBox.clear()
@@ -301,6 +305,7 @@ class RobustConstruct(Ui_RobustMain):
         settings["windowWidth"] = geo.width()
         settings["windowHeight"] = geo.height()
         settings["controlPanelWidth"] = self.mainHorizontalSplitter.sizes()[1]
+        settings["statusAreaHeight"] = self.controlVerticalSplitter.sizes()[0]
         with open("./resources/settings.json", "w") as f:
             json.dump(settings, f)
         self.worker.driverManager.appClosed = True
