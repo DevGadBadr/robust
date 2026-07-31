@@ -1,3 +1,4 @@
+import html
 from ui.uijobContent import Ui_jobContentDialog
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
@@ -14,7 +15,11 @@ class JobContentConstruct(Ui_jobContentDialog):
         jobContentDialog.setWindowFlags(jobContentDialog.windowFlags() | Qt.WindowMinimizeButtonHint)
         jobContentDialog.setWindowTitle("Content")
         self.dialog = jobContentDialog
-        self.textBrowser.setPlainText(self.content if self.content else "No content yet")
+        self.textBrowser.setOpenExternalLinks(True)
+        if self.content:
+            self.textBrowser.setHtml(self.contentToHtml(self.content))
+        else:
+            self.textBrowser.setPlainText("No content yet")
         self.connectActions()
 
     def connectActions(self):
@@ -26,3 +31,13 @@ class JobContentConstruct(Ui_jobContentDialog):
 
     def handleCloseButton(self):
         self.dialog.close()
+
+    def contentToHtml(self, content):
+        parts = []
+        for line in content.split("\n"):
+            escaped = html.escape(line)
+            if line.startswith("http://") or line.startswith("https://"):
+                parts.append(f'<a href="{escaped}">{escaped}</a>')
+            else:
+                parts.append(escaped)
+        return "<br>".join(parts)
