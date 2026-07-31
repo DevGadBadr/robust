@@ -3,18 +3,18 @@ from PyQt5 import QtWidgets
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QDialog
 from scrapeJobsHelpers import clickButtonJob, getUrlJob, inputFieldJob, extractTextJob, extractLinksJob
-from ui.uirobust import Ui_RobustDialog
+from ui.uimain import Ui_RobustMain
 from newJobConstruct import NewJobConstruct
 from jobsConstruct import JobsConstruct
 from PyQt5.QtCore import QTimer, Qt
 from workerThread import QWorker
 from collections import deque
 from scrapeJobs import abstractScrapeJob
-from elementSetup import setUpMiddleLine
+from elementSetup import setUpSplitters
 import win32gui
 import win32con
 
-class RobustConstruct(Ui_RobustDialog):
+class RobustConstruct(Ui_RobustMain):
 
     def __init__(self):
         super().__init__()
@@ -25,8 +25,9 @@ class RobustConstruct(Ui_RobustDialog):
 
     def setupUi(self, RobustDialog:QDialog):
         super().setupUi(RobustDialog)
+        self.mainWindow = RobustDialog
         RobustDialog.setWindowFlags(RobustDialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-        RobustDialog.setWindowFlags(RobustDialog.windowFlags() | Qt.WindowMinimizeButtonHint)
+        RobustDialog.setWindowFlags(RobustDialog.windowFlags() | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint)
         RobustDialog.closeEvent = self.closeEvent
         self.intitializing = True
         self.driverInstancePlaceHolder.deleteLater()
@@ -36,7 +37,7 @@ class RobustConstruct(Ui_RobustDialog):
         self.loadExistingJobs()
         self.loadSettings()
         self.modifyMainDefaultBox()
-        setUpMiddleLine(self.middleLine1, self)
+        setUpSplitters(self)
         self.intitializing = False
         self.startButton.click()
 
@@ -55,6 +56,19 @@ class RobustConstruct(Ui_RobustDialog):
         if settingsFile.get("isVisible", False):
             self.hiddenCheckBox.setChecked(True)
         self.latestJob = settingsFile.get("latestJob","")
+        self.controlPanelWidth = settingsFile.get("controlPanelWidth", 500)
+        self.windowX = settingsFile.get("windowX", 0)
+        self.windowY = settingsFile.get("windowY", 0)
+        self.windowWidth = settingsFile.get("windowWidth", 1020)
+        self.windowHeight = settingsFile.get("windowHeight", 821)
+        self.windowMaximized = settingsFile.get("windowMaximized", False)
+
+    def restoreWindowGeometry(self):
+        self.mainWindow.setGeometry(self.windowX, self.windowY, self.windowWidth, self.windowHeight)
+        if self.windowMaximized:
+            self.mainWindow.showMaximized()
+        else:
+            self.mainWindow.show()
 
     def modifyMainDefaultBox(self):
         self.mainDefaultBox.clear()
@@ -78,6 +92,7 @@ class RobustConstruct(Ui_RobustDialog):
         self.hiddenCheckBox.stateChanged.connect(self.handleHiddenCheckboxChange)
         self.addScrapeJobButton.clicked.connect(self.openAddJobDialog)
         self.mainDefaultBox.currentTextChanged.connect(self.handleMainJobChange)
+        self.exitAction.triggered.connect(self.mainWindow.close)
 
     def handleMainJobChange(self):
         if not self.intitializing:
@@ -273,6 +288,21 @@ class RobustConstruct(Ui_RobustDialog):
                 pass
 
     def closeEvent(self, event):
+        with open("./resources/settings.json", "r") as f:
+            settings = json.load(f)
+        if self.mainWindow.isMaximized():
+            settings["windowMaximized"] = True
+            geo = self.mainWindow.normalGeometry()
+        else:
+            settings["windowMaximized"] = False
+            geo = self.mainWindow.geometry()
+        settings["windowX"] = geo.x()
+        settings["windowY"] = geo.y()
+        settings["windowWidth"] = geo.width()
+        settings["windowHeight"] = geo.height()
+        settings["controlPanelWidth"] = self.mainHorizontalSplitter.sizes()[1]
+        with open("./resources/settings.json", "w") as f:
+            json.dump(settings, f)
         self.worker.driverManager.appClosed = True
         print("App Closed. Closing Drivers.")
         self.uiUpdateTimer.stop()

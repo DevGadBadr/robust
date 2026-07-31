@@ -1,22 +1,19 @@
 from robustConstruct import RobustConstruct
-from PyQt5.QtWidgets import QApplication, QDialog
+from PyQt5.QtWidgets import QApplication, QDialog, QMainWindow
 import sys
 
-class RobustDialog(RobustConstruct):
+class RobustMain(RobustConstruct):
 
     def setupUi(self, dialog:QDialog):
         super().setupUi(dialog)
+
 
 if __name__ == "__main__":
     if not 'fusion' in sys.argv:
         QApplication.setStyle('Fusion')
     app = QApplication(sys.argv)
-    mainDialog = QDialog()
-    applicationClass = RobustDialog()
+    mainDialog = QMainWindow()
+    applicationClass = RobustMain()
     applicationClass.setupUi(mainDialog)
-    screen = QApplication.primaryScreen().geometry()
-    x = screen.width() - mainDialog.width()
-    y = (screen.height() - mainDialog.height() - 100) // 2
-    mainDialog.move(x, y)
-    mainDialog.show()
+    applicationClass.restoreWindowGeometry()
     sys.exit(app.exec())
