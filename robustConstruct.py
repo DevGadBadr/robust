@@ -2,7 +2,7 @@ import json
 from PyQt5 import QtWidgets
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QDialog
-from scrapeJobsHelpers import clickButtonJob, getUrlJob, inputFieldJob
+from scrapeJobsHelpers import clickButtonJob, getUrlJob, inputFieldJob, extractTextJob
 from ui.uirobust import Ui_RobustDialog
 from newJobConstruct import NewJobConstruct
 from jobsConstruct import JobsConstruct
@@ -130,6 +130,8 @@ class RobustConstruct(Ui_RobustDialog):
                     actions.insert(jobPosition, (inputFieldJob,kwargs))
                 elif jobType == "ClickButton":
                     actions.insert(jobPosition, (clickButtonJob,kwargs))
+                elif jobType == "ExtractText":
+                    actions.insert(jobPosition, (extractTextJob,kwargs))
         return actions
 
     def handleQThreadStatus(self, event):
@@ -167,8 +169,13 @@ class RobustConstruct(Ui_RobustDialog):
                 if action[1].get("uuid") == jobuuid:
                     if direction == "forward":
                         action[1]['isexecuted'] = True
+                        if action[1].get("jobtype") == "ExtractText" and not str(result).startswith("Error:"):
+                            action[1]['scraped_text'] = result
+                            result = "Extracted Successfully"
                     elif direction == "backward":
                         action[1]['isexecuted'] = False
+                        if action[1].get("jobtype") == "ExtractText":
+                            action[1].pop('scraped_text', None)
                     break
             if "settingsWindowClass" in self.worker.driverManager.drivers[event['uuid']].keys():
                 jobSettingsClass = self.worker.driverManager.drivers[event['uuid']]['settingsWindowClass']

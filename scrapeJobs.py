@@ -1,5 +1,5 @@
 import json
-from scrapeJobsHelpers import getUrlJob, inputFieldJob, clickButtonJob
+from scrapeJobsHelpers import getUrlJob, inputFieldJob, clickButtonJob, extractTextJob
 
 class abstractScrapeJob:
     def __init__(self, driver):
@@ -68,6 +68,21 @@ class abstractScrapeJob:
                             existAction[1]['field_identifier'] = job[1]['field_identifier']
                             existAction[1]['identifier_value'] = job[1]['identifier_value']
                             existAction[1]['value'] = job[1]['value']
+                            updateFlag = True
+                    if jobType == "ExtractText":
+                        if existingJob[1]['text_identifier'] == job[1]['text_identifier'] and existingJob[1]['identifier_value'] == job[1]['identifier_value']:
+                            self.actions.pop()
+                            return "Job Exists"
+                        else:
+                            # Find Related Action
+                            for action in self.actions:
+                                if action[1]['uuid'] == jobuuid:
+                                    existAction = action
+                                    break
+                            existingJob[1]['text_identifier'] = job[1]['text_identifier']
+                            existingJob[1]['identifier_value'] = job[1]['identifier_value']
+                            existAction[1]['text_identifier'] = job[1]['text_identifier']
+                            existAction[1]['identifier_value'] = job[1]['identifier_value']
                             updateFlag = True
                     break
                     
@@ -138,6 +153,18 @@ class abstractScrapeJob:
         self.actions.append(job)
         self.lastExecuted = False
         saveResult = self.saveJobIfNotExist(("ClickButton", {"button_identifier":button_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype, "position":(len(self.actions)-1)}), owner)
+        return saveResult
+
+    def addExtractTextJob(self, **kwargs):
+        text_identifier = kwargs.get("text_identifier")
+        identifier_value = kwargs.get("identifier_value")
+        uuid = kwargs.get("uuid")
+        joptype = "ExtractText"
+        owner = kwargs.get("owner")
+        job = (extractTextJob, {"text_identifier":text_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype, "position":(len(self.actions))})
+        self.actions.append(job)
+        self.lastExecuted = False
+        saveResult = self.saveJobIfNotExist(("ExtractText", {"text_identifier":text_identifier,"identifier_value":identifier_value, "uuid": uuid, "jobtype": joptype, "position":(len(self.actions)-1)}), owner)
         return saveResult
 
     def executeNextAction(self):

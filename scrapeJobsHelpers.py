@@ -4,7 +4,8 @@ from selenium.common.exceptions import ElementClickInterceptedException, NoSuchE
 JOB_TYPES = {
     "geturl": "Get URL",
     "inputfield": "Input Field",
-    "clickbutton": "Click Button"
+    "clickbutton": "Click Button",
+    "extracttext": "Extract Text"
 }
 
 IDENTIFIER_VALUES = {
@@ -59,3 +60,15 @@ def clickButtonJob(driver, **kwargs):
     except ElementClickInterceptedException:
         return "Error: Button click intercepted", jobuuid, direction
     return "Done", jobuuid, direction
+
+def extractTextJob(driver, **kwargs):
+    text_identifier = kwargs.get("text_identifier")
+    identifier_value = kwargs.get("identifier_value")
+    jobuuid = kwargs.get("uuid")
+    direction = kwargs.get("direction", "forward")
+    try:
+        element = driver.find_element(text_identifier, identifier_value)
+    except NoSuchElementException:
+        return "Error: Element not found", jobuuid, direction
+    text = element.text or element.get_attribute("value") or ""
+    return text, jobuuid, direction

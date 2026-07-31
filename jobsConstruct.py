@@ -1,8 +1,9 @@
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtCore import Qt
 from ui.uijobs import Ui_JobsDialog
 from PyQt5.QtWidgets import QDialog, QGraphicsOpacityEffect
 from scrapeJobsHelpers import JOB_TYPES, IDENTIFIER_VALUES
+from jobContentConstruct import JobContentConstruct
 import uuid
 import json
 
@@ -96,6 +97,21 @@ class JobsConstruct(Ui_JobsDialog):
                 doneCheckBox = lastJobWidget.findChild(QtWidgets.QCheckBox, "doneCheckBox"+str(uuid))
                 doneCheckBox.setChecked(isexecuted)
                 doneCheckBox.setObjectName("doneCheckBox"+str(uuid))
+            elif kwargs.get("jobtype") == "ExtractText":
+                identifierType = kwargs.get("text_identifier")
+                identifierValue = kwargs.get("identifier_value")
+                isexecuted = kwargs.get("isexecuted", False)
+                self.addJobHandle()
+                lastJobWidget = self.groupBox.findChild(QtWidgets.QWidget, "oneJob"+str(uuid))
+                lastJobWidget.setProperty("uuid", uuid)
+                jobTypeSelector = lastJobWidget.findChild(QtWidgets.QComboBox, "jobTypeSelector"+str(uuid))
+                jobTypeSelector.setCurrentText("Extract Text")
+                identifierTypeSelector = lastJobWidget.findChild(QtWidgets.QComboBox, "identifierTypeSelector"+str(uuid))
+                identifierTypeSelector.setCurrentIndex(identifierTypeSelector.findData(identifierType))
+                identifierValueBox = lastJobWidget.findChild(QtWidgets.QLineEdit, "identifierValueBox"+str(uuid))
+                identifierValueBox.setText(identifierValue)
+                doneCheckBox = lastJobWidget.findChild(QtWidgets.QCheckBox, "doneCheckBox"+str(uuid))
+                doneCheckBox.setChecked(isexecuted)
         self.newjobflag = True
 
     def updateJobExecutionStatus(self, jobuuid, direction, result):
@@ -139,7 +155,9 @@ class JobsConstruct(Ui_JobsDialog):
         self.dragUUID = None
         self.initialActions = []
         self.opaceEffect = QGraphicsOpacityEffect()     
-        self.opaceEffect.setOpacity(0)  
+        self.opaceEffect.setOpacity(0)
+        self.jobContentDialog = None
+        self.jobContentDialogClass = None
 
     def connectActions(self):
         self.addJobButton.clicked.connect(self.addJobHandle)
@@ -190,6 +208,40 @@ class JobsConstruct(Ui_JobsDialog):
         jobuuid = jobWidget.property("uuid")
         self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].deleteJob(uuid=jobuuid, owner=self.jobsFor)
 
+    def ensureArtifactButton(self, oneJob, oneJobLayout, jobUUID):
+        existing = oneJob.findChild(QtWidgets.QPushButton, "artifactButton"+str(jobUUID))
+        if existing:
+            return
+        artifactButton = QtWidgets.QPushButton(oneJob)
+        artifactButton.setMaximumSize(QtCore.QSize(30, 16777215))
+        artifactButton.setText("")
+        icon = QtGui.QIcon()
+        icon.addPixmap(QtGui.QPixmap("./resources/document.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        artifactButton.setIcon(icon)
+        artifactButton.setObjectName("artifactButton"+str(jobUUID))
+        artifactButton.clicked.connect(self.openJobContentHandle)
+        oneJobLayout.addWidget(artifactButton)
+
+    def removeArtifactButton(self, oneJob, jobUUID):
+        artifactButton = oneJob.findChild(QtWidgets.QPushButton, "artifactButton"+str(jobUUID))
+        if artifactButton:
+            artifactButton.deleteLater()
+
+    def openJobContentHandle(self):
+        button = self.groupBox.sender()
+        jobWidget = button.parent()
+        jobuuid = jobWidget.property("uuid")
+        scraped_text = ""
+        if jobuuid:
+            for action in self.scrapeJobClass.actions:
+                if action[1].get("uuid") == jobuuid:
+                    scraped_text = action[1].get("scraped_text", "")
+                    break
+        self.jobContentDialog = QDialog()
+        self.jobContentDialogClass = JobContentConstruct(scraped_text)
+        self.jobContentDialogClass.setupUi(self.jobContentDialog)
+        self.jobContentDialog.show()
+
     def evaluateJobsOrderChange(self):
         if not self.currentActions == self.initialActions:
             self.opaceEffect.setOpacity(1)
@@ -202,13 +254,11 @@ class JobsConstruct(Ui_JobsDialog):
         draggedJobIndex = self.currentJobs.index(self.draggedJob)
         self.dragNextJob = self.currentJobs[draggedJobIndex+1] if (draggedJobIndex+1) < len(self.currentJobs) else None
         self.nextJobYLine = self.dragNextJob.pos().y() + self.dragNextJob.size().height() / 2 if self.dragNextJob else 0
-        print(f"Next Job Y Line: {self.nextJobYLine}")
     
     def updateDragPreviousJob(self):
         draggedJobIndex = self.currentJobs.index(self.draggedJob)
         self.dragPreviousJob = self.currentJobs[draggedJobIndex-1] if (draggedJobIndex-1) > -1 else None
         self.previousJobYLine = self.dragPreviousJob.pos().y() + self.dragPreviousJob.size().height() / 2 if self.dragPreviousJob else 0
-        print(f"Previous Job Y Line: {self.previousJobYLine}")
     
     def handleJobPress(self, event):
         button = event.button()
@@ -363,6 +413,15 @@ class JobsConstruct(Ui_JobsDialog):
                     doneCheckBox.setObjectName("doneCheckBox"+str(newJobUUID))
                     saveMsg = self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addInputFieldJob(field_identifier=identifierType, identifier_value=identifierValue, value=value, owner=self.jobsFor, uuid=newJobUUID)
                     self.setStatusMessage(saveMsg)
+            elif jobType == "Extract Text":
+                if not identifierType or not identifierValue:
+                    self.setStatusMessage("Please fill in all required fields for Extract Text job.")
+                    return
+                else:
+                    oneJob.setProperty("uuid", newJobUUID)
+                    doneCheckBox.setObjectName("doneCheckBox"+str(newJobUUID))
+                    saveMsg = self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addExtractTextJob(text_identifier=identifierType, identifier_value=identifierValue, owner=self.jobsFor, uuid=newJobUUID)
+                    self.setStatusMessage(saveMsg)
         saveJobButton.clicked.connect(saveJobHandle)
         oneJobLayout.addWidget(saveJobButton)
         deleteJobButton = QtWidgets.QPushButton(oneJob)
@@ -379,12 +438,20 @@ class JobsConstruct(Ui_JobsDialog):
                 identifierTypeSelector.setDisabled(True)
                 identifierValueBox.setDisabled(True)
                 valueBox.setDisabled(False)
+                self.removeArtifactButton(oneJob, newJobUUID)
             elif text == "Click Button":
                 valueBox.setDisabled(True)
                 identifierTypeSelector.setDisabled(False)
                 identifierValueBox.setDisabled(False)
+                self.removeArtifactButton(oneJob, newJobUUID)
+            elif text == "Extract Text":
+                valueBox.setDisabled(True)
+                identifierTypeSelector.setDisabled(False)
+                identifierValueBox.setDisabled(False)
+                self.ensureArtifactButton(oneJob, oneJobLayout, newJobUUID)
             else:
                 valueBox.setDisabled(False)
                 identifierValueBox.setDisabled(False)
                 identifierTypeSelector.setDisabled(False)
+                self.removeArtifactButton(oneJob, newJobUUID)
         jobTypeSelector.currentTextChanged.connect(jobTypeChangedHandle)
