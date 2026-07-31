@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'uijobs.ui'
+# Form implementation generated from reading ui file './ui/uijobs.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.11
 #
@@ -105,6 +105,14 @@ class Ui_JobsDialog(object):
         self.deleteJobButton.setMaximumSize(QtCore.QSize(50, 16777215))
         self.deleteJobButton.setObjectName("deleteJobButton")
         self.onJobLayout.addWidget(self.deleteJobButton)
+        self.artifactButton = QtWidgets.QPushButton(self.oneJob)
+        self.artifactButton.setMaximumSize(QtCore.QSize(30, 16777215))
+        self.artifactButton.setText("")
+        icon = QtGui.QIcon()
+        icon.addPixmap(QtGui.QPixmap("./ui\\../resources/document.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.artifactButton.setIcon(icon)
+        self.artifactButton.setObjectName("artifactButton")
+        self.onJobLayout.addWidget(self.artifactButton)
         self.jobsContainerLayout.addWidget(self.oneJob)
         self.verticalLayout_3.addWidget(self.jobsContainer)
         spacerItem2 = QtWidgets.QSpacerItem(20, 394, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)

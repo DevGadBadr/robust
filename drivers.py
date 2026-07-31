@@ -37,7 +37,7 @@ class DriverManager(QObject):
         if isHidden:
             win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
         threadQueue = queue.Queue()
-        oneDriver = {"driver":driver,"dropped":False,"threadQueue":threadQueue,"uuid":driverUUID,"pid":driverpid,"chromePid":chromePid,"HWND":hwnd}
+        oneDriver = {"driver":driver,"dropped":False,"threadQueue":threadQueue,"uuid":driverUUID,"pid":driverpid,"chromePid":chromePid,"HWND":hwnd,"visible": not isHidden}
         self.drivers[driverUUID] = oneDriver
         if self.appClosed:
             self.createTimer.stop()

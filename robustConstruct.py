@@ -1,5 +1,4 @@
 import json
-
 from PyQt5 import QtWidgets
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QDialog
@@ -287,10 +286,8 @@ class RobustConstruct(Ui_RobustDialog):
         for job in self.existJobs:
             driverDefaultUrl.addItem(job)
         def handleDriverScrapeJobChange(event):
-            print(event)
             scrapeJobClass = abstractScrapeJob(self.worker.driverManager.drivers[uuid]['driver'])
             actions = self.getActionsForScrapeJob(driverDefaultUrl.currentText())
-            print(actions)
             scrapeJobClass.initiateActions(actions)
             self.worker.driverManager.drivers[uuid]['scrapeJobClass'] = scrapeJobClass
         def controlButtonHandle():
@@ -308,15 +305,14 @@ class RobustConstruct(Ui_RobustDialog):
             executeClass = self.worker.driverManager.drivers[uuid]['scrapeJobClass']
             func = executeClass.executePreviousAction
             self.worker.driverManager.drivers[uuid]['threadQueue'].put((func,{}))
-        showFlag = not self.hiddenCheckBox.isChecked()
         def eyeButtonHandle():
-            nonlocal showFlag
-            if showFlag:
-                self.postToUI("hideDriver", {"HWND": self.worker.driverManager.drivers[uuid]['HWND']})
-                showFlag = False
+            driver = self.worker.driverManager.drivers[uuid]
+            if driver['visible']:
+                self.postToUI("hideDriver", {"HWND": driver['HWND']})
+                driver['visible'] = False
             else:
-                self.postToUI("showDriver", {"HWND": self.worker.driverManager.drivers[uuid]['HWND']})
-                showFlag = True
+                self.postToUI("showDriver", {"HWND": driver['HWND']})
+                driver['visible'] = True
         driverDefaultUrl.currentTextChanged.connect(handleDriverScrapeJobChange)
         driverDefaultUrl.setCurrentText(self.mainDefaultBox.currentText())
         instanceLayout.addWidget(driverDefaultUrl)
