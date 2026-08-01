@@ -119,6 +119,7 @@ class abstractScrapeJob:
             if action[1].get("uuid") == uuid:
                 self.actions.remove(action)
                 print(f"Deleted job from actions with uuid: {uuid} for owner: {owner}")
+                self.executePosition-=1
                 break
         with open("./resources/jobs.json","r") as f:
             jobsFile = json.load(f)

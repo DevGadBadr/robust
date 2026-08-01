@@ -2,7 +2,7 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog, QGraphicsOpacityEffect
 from scrapeJobsHelpers import JOB_TYPES, IDENTIFIER_VALUES
-from jobContentConstruct import JobContentConstruct
+from artifactConstruct import JobArtifactConstruct
 import uuid
 import json
 
@@ -513,7 +513,7 @@ class JobsAreaConstruct:
                         content = ""
                     break
         self.jobContentDialog = QDialog()
-        self.jobContentDialogClass = JobContentConstruct(content)
+        self.jobContentDialogClass = JobArtifactConstruct(content)
         self.jobContentDialogClass.setupUi(self.jobContentDialog)
         self.jobContentDialog.show()
 

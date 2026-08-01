@@ -4,7 +4,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 
 
-class JobContentConstruct(Ui_jobContentDialog):
+class JobArtifactConstruct(Ui_jobContentDialog):
     def __init__(self, content=""):
         super().__init__()
         self.content = content

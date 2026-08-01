@@ -142,6 +142,39 @@ class RobustConstruct(Ui_RobustMain):
         self.exitAction.triggered.connect(self.mainWindow.close)
         self.actionDark.triggered.connect(lambda: self.applyDarkTheme())
         self.actionLight.triggered.connect(lambda: self.applyLightTheme())
+        self.driversTabWidget.currentChanged.connect(self.handleDriverTabChange)
+
+    def handleDriverTabChange(self, index):
+        print("Driver Tab Changed to index:", index)
+        if index < 0:
+            return
+        currentWidget = self.driversTabWidget.currentWidget()
+        driverObjectName = currentWidget.objectName() if currentWidget else None
+        if not driverObjectName or not driverObjectName.startswith("driverTab"):
+            return
+        scrapeUuidStr = driverObjectName.replace("driverTab", "", 1)
+        # objectName stores str(uuid); drivers dict is keyed by uuid.UUID
+        driver = next(
+            (driver for uuid, driver in self.worker.driverManager.drivers.items() if str(uuid) == scrapeUuidStr),
+            None,
+        )
+        if not driver:
+            return
+        driverControlButton = self.scrollAreaWidgetContents.findChild(QtWidgets.QPushButton, "driverControl" + scrapeUuidStr)
+        if not driverControlButton:
+            return
+        driverControlButton.click()
+        existing = driver.get('settingsWindowClass')
+        if existing is not None:
+            existing.activate()
+        else:
+            prev = getattr(self, 'activeJobsArea', None)
+            if prev is not None:
+                prev.deactivate()
+                self.jobsGroupBox.setTitle("Jobs")
+                self.statusLabel.setText("")
+                self.saveOrderButton.setEnabled(False)
+            
 
     def applyDarkTheme(self, persist=True):
         QApplication.setPalette(DarkPalette)
@@ -559,9 +592,7 @@ class RobustConstruct(Ui_RobustMain):
             driver = self.worker.driverManager.drivers[uuid]
             existing = driver.get('settingsWindowClass')
             if existing is None:
-                jobsAreaClass = JobsAreaConstruct(
-                    self, driverDefaultUrl.currentText(), uuid, driver['number']
-                )
+                jobsAreaClass = JobsAreaConstruct(self, driverDefaultUrl.currentText(), uuid, driver['number'])
                 jobsAreaClass.setupUi()
                 driver['settingsWindowClass'] = jobsAreaClass
             else:
