@@ -1,4 +1,5 @@
 from robustConstruct import RobustConstruct
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QDialog, QMainWindow
 import sys
 
@@ -11,6 +12,7 @@ if __name__ == "__main__":
     if not 'fusion' in sys.argv:
         QApplication.setStyle('Fusion')
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon("./resources/robust.png"))
     mainDialog = QMainWindow()
     applicationClass = RobustMain()
     applicationClass.setupUi(mainDialog)

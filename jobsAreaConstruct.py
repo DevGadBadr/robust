@@ -657,7 +657,7 @@ class JobsAreaConstruct:
         jobPickButton = QtWidgets.QPushButton(oneJob)
         jobPickButton.setText("")
         pickIcon = QtGui.QIcon()
-        pickIcon.addPixmap(QtGui.QPixmap("./resources/cursor.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        pickIcon.addPixmap(QtGui.QPixmap("./resources/mycursor.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         jobPickButton.setIcon(pickIcon)
         jobPickButton.setObjectName("jobPickButton" + str(newJobUUID))
         jobPickButton.setEnabled(False)

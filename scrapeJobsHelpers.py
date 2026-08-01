@@ -1,5 +1,5 @@
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, ElementNotInteractableException, WebDriverException
+from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, ElementNotInteractableException, WebDriverException, InvalidSelectorException
 
 JOB_TYPES = {
     "geturl": "Get URL",
@@ -38,6 +38,8 @@ def inputFieldJob(driver, **kwargs):
         field = driver.find_element(field_identifier, identifier_value)
     except NoSuchElementException:
         return "Error: Field not found", jobuuid, direction, None
+    except InvalidSelectorException:
+        return "Error: Invalid selector", jobuuid, direction, None
     try:
         field.clear()
         field.send_keys(value)
@@ -54,6 +56,8 @@ def clickButtonJob(driver, **kwargs):
         button = driver.find_element(button_identifier, identifier_value)
     except NoSuchElementException:
         return "Error: Button not found", jobuuid, direction, None
+    except InvalidSelectorException:
+        return "Error: Invalid selector", jobuuid, direction, None
     try:
         button.click()
     except ElementNotInteractableException:
@@ -71,6 +75,8 @@ def extractTextJob(driver, **kwargs):
         element = driver.find_element(text_identifier, identifier_value)
     except NoSuchElementException:
         return "Error: Element not found", jobuuid, direction, None
+    except InvalidSelectorException:
+        return "Error: Invalid selector", jobuuid, direction, None
     text = element.text or element.get_attribute("value") or ""
     return "Done", jobuuid, direction, text
 
@@ -83,6 +89,8 @@ def extractLinksJob(driver, **kwargs):
         element = driver.find_element(link_identifier, identifier_value)
     except NoSuchElementException:
         return "Error: Element not found", jobuuid, direction, None
+    except InvalidSelectorException:
+        return "Error: Invalid selector", jobuuid, direction, None
     links = []
     if element.tag_name.lower() == "a":
         href = element.get_attribute("href")

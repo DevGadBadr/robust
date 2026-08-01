@@ -91,6 +91,7 @@ class RobustConstruct(Ui_RobustMain):
         self.latestJob = settingsFile.get("latestJob","")
         self.controlPanelWidth = settingsFile.get("controlPanelWidth", 500)
         self.statusAreaHeight = settingsFile.get("statusAreaHeight", 200)
+        self.jobsAreaHeight = settingsFile.get("jobsAreaHeight", 200)
         self.windowX = settingsFile.get("windowX", 0)
         self.windowY = settingsFile.get("windowY", 0)
         self.windowWidth = settingsFile.get("windowWidth", 1020)
@@ -114,8 +115,7 @@ class RobustConstruct(Ui_RobustMain):
         else:
             self.mainWindow.show()
         # Re-apply after show so sizes aren't clamped against the pre-show height
-        QTimer.singleShot(0, self.applyVerticalSizes)
-        QTimer.singleShot(0, self.applyHorizontalSizes)
+        QTimer.singleShot(0, self.applyAllSplitterSizes)
 
     def modifyMainDefaultBox(self):
         self.mainDefaultBox.clear()
@@ -539,6 +539,7 @@ class RobustConstruct(Ui_RobustMain):
         settings["windowHeight"] = geo.height()
         settings["controlPanelWidth"] = self.mainHorizontalSplitter.sizes()[1]
         settings["statusAreaHeight"] = self.controlVerticalSplitter.sizes()[0]
+        settings["jobsAreaHeight"] = self.jobsVerticalSplitter.sizes()[1]
         with open("./resources/settings.json", "w") as f:
             json.dump(settings, f)
         self.worker.driverManager.appClosed = True

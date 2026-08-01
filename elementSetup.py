@@ -5,6 +5,7 @@ from PyQt5 import QtWidgets
 def setUpSplitters(robustClass):
     hSplitter: QtWidgets.QSplitter = robustClass.mainHorizontalSplitter
     vSplitter: QtWidgets.QSplitter = robustClass.controlVerticalSplitter
+    jobsSplitter: QtWidgets.QSplitter = robustClass.jobsVerticalSplitter
     minWidth = 500
     minHeight = 100
 
@@ -12,6 +13,9 @@ def setUpSplitters(robustClass):
     robustClass.controlPanel.setMinimumWidth(minWidth)
     robustClass.statusArea.setMinimumHeight(minHeight)
     robustClass.scrollArea.setMinimumHeight(minHeight)
+    # status + drivers each need minHeight
+    robustClass.controlVerticalSplitter.setMinimumHeight(2 * minHeight)
+    robustClass.jobsArea.setMinimumHeight(minHeight)
 
     # DriverWindow absorbs window resize; controlPanel keeps its width unless user drags
     hSplitter.setStretchFactor(0, 1)
@@ -19,6 +23,9 @@ def setUpSplitters(robustClass):
     # scrollArea absorbs resize; statusArea keeps its height unless user drags
     vSplitter.setStretchFactor(0, 0)
     vSplitter.setStretchFactor(1, 1)
+    # control stack absorbs resize; jobsArea keeps its height unless user drags
+    jobsSplitter.setStretchFactor(0, 1)
+    jobsSplitter.setStretchFactor(1, 0)
 
     robustClass.verticalLayout.setStretch(4, 1)
 
@@ -36,15 +43,30 @@ def setUpSplitters(robustClass):
         statusHeight = max(min(statusHeight, total - scrollMin), statusMin)
         vSplitter.setSizes([statusHeight, total - statusHeight])
 
-    if hSplitter.size().width() > 0:
-        applyHorizontalSizes()
-    else:
-        QTimer.singleShot(0, applyHorizontalSizes)
+    def applyJobsVerticalSizes():
+        jobsHeight = getattr(robustClass, "jobsAreaHeight", 200)
+        total = jobsSplitter.size().height() or 400
+        controlMin = robustClass.controlVerticalSplitter.minimumHeight()
+        jobsMin = robustClass.jobsArea.minimumHeight()
+        jobsHeight = max(min(jobsHeight, total - controlMin), jobsMin)
+        jobsSplitter.setSizes([total - jobsHeight, jobsHeight])
 
-    if vSplitter.size().height() > 0:
+    def applyAllSplitterSizes():
+        applyHorizontalSizes()
+        applyJobsVerticalSizes()
         applyVerticalSizes()
+
+    sized = (
+        hSplitter.size().width() > 0
+        and vSplitter.size().height() > 0
+        and jobsSplitter.size().height() > 0
+    )
+    if sized:
+        applyAllSplitterSizes()
     else:
-        QTimer.singleShot(0, applyVerticalSizes)
+        QTimer.singleShot(0, applyAllSplitterSizes)
 
     robustClass.applyHorizontalSizes = applyHorizontalSizes
     robustClass.applyVerticalSizes = applyVerticalSizes
+    robustClass.applyJobsVerticalSizes = applyJobsVerticalSizes
+    robustClass.applyAllSplitterSizes = applyAllSplitterSizes
