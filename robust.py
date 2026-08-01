@@ -7,7 +7,6 @@ class RobustMain(RobustConstruct):
     def setupUi(self, dialog:QDialog):
         super().setupUi(dialog)
 
-
 if __name__ == "__main__":
     if not 'fusion' in sys.argv:
         QApplication.setStyle('Fusion')

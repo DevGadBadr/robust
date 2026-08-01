@@ -62,7 +62,20 @@ class DriverManager(QObject):
                 driver.execute_script("document.title = 'Driver " + str(kwargs['number']) + "'")
             else:
                 result, jobuuid, direction, artifact = func()
-                self.status.emit({"type":"driverResult", "result":result, "artifact":artifact, "uuid":driverUUID, "jobuuid": jobuuid, "direction": direction})
+                screenshot = None
+                try:
+                    screenshot = driver.get_screenshot_as_png()
+                except Exception:
+                    pass
+                self.status.emit({
+                    "type": "driverResult",
+                    "result": result,
+                    "artifact": artifact,
+                    "screenshot": screenshot,
+                    "uuid": driverUUID,
+                    "jobuuid": jobuuid,
+                    "direction": direction,
+                })
             threadQueue.task_done()
 
     def constructDrivers(self, count, isHeadless, isHidden):

@@ -26,21 +26,16 @@
       <widget class="QWidget" name="driverWindow" native="true">
        <layout class="QHBoxLayout" name="horizontalLayout_3">
         <item>
-         <widget class="QTabWidget" name="tabWidget">
-          <property name="currentIndex">
-           <number>0</number>
+         <widget class="QTabWidget" name="driversTabWidget">
+          <property name="tabPosition">
+           <enum>QTabWidget::North</enum>
           </property>
-          <widget class="QWidget" name="tab">
-           <attribute name="title">
-            <string>Tab 1</string>
-           </attribute>
-           <layout class="QHBoxLayout" name="horizontalLayout_4"/>
-          </widget>
-          <widget class="QWidget" name="tab_2">
-           <attribute name="title">
-            <string>Tab 2</string>
-           </attribute>
-          </widget>
+          <property name="tabShape">
+           <enum>QTabWidget::Rounded</enum>
+          </property>
+          <property name="currentIndex">
+           <number>-1</number>
+          </property>
          </widget>
         </item>
        </layout>
@@ -127,8 +122,14 @@
                   <height>0</height>
                  </size>
                 </property>
+                <property name="font">
+                 <font>
+                  <weight>75</weight>
+                  <bold>true</bold>
+                 </font>
+                </property>
                 <property name="styleSheet">
-                 <string notr="true">font-weight:bold;</string>
+                 <string notr="true"/>
                 </property>
                 <property name="text">
                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;1&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
@@ -283,7 +284,7 @@
             <property name="minimumSize">
              <size>
               <width>120</width>
-              <height>0</height>
+              <height>30</height>
              </size>
             </property>
             <property name="maximumSize">
@@ -293,7 +294,7 @@
              </size>
             </property>
             <property name="styleSheet">
-             <string notr="true">height:30px;</string>
+             <string notr="true"/>
             </property>
             <property name="text">
              <string>Clear</string>
@@ -321,13 +322,11 @@
             <property name="minimumSize">
              <size>
               <width>150</width>
-              <height>0</height>
+              <height>30</height>
              </size>
             </property>
             <property name="styleSheet">
-             <string notr="true">
-height:30px;
-max-width:300px;</string>
+             <string notr="true"/>
             </property>
             <property name="text">
              <string>Create</string>
@@ -365,7 +364,7 @@ max-width:300px;</string>
               <x>0</x>
               <y>0</y>
               <width>477</width>
-              <height>123</height>
+              <height>129</height>
              </rect>
             </property>
             <layout class="QVBoxLayout" name="scrollAreaLayout">
@@ -640,8 +639,7 @@ max-width:300px;</string>
                </size>
               </property>
               <property name="styleSheet">
-               <string notr="true">height:30px;
-</string>
+               <string notr="true"/>
               </property>
               <property name="text">
                <string>Execute All</string>
@@ -666,6 +664,12 @@ max-width:300px;</string>
             </item>
             <item>
              <widget class="QPushButton" name="closeAllButton">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>30</height>
+               </size>
+              </property>
               <property name="maximumSize">
                <size>
                 <width>200</width>
@@ -673,8 +677,7 @@ max-width:300px;</string>
                </size>
               </property>
               <property name="styleSheet">
-               <string notr="true">height:30px;
-</string>
+               <string notr="true"/>
               </property>
               <property name="text">
                <string>Close All</string>
@@ -706,12 +709,30 @@ max-width:300px;</string>
     </property>
     <addaction name="exitAction"/>
    </widget>
+   <widget class="QMenu" name="menuTheme">
+    <property name="title">
+     <string>Theme</string>
+    </property>
+    <addaction name="actionDark"/>
+    <addaction name="actionLight"/>
+   </widget>
    <addaction name="menuRobust"/>
+   <addaction name="menuTheme"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="exitAction">
    <property name="text">
     <string>Exit</string>
+   </property>
+  </action>
+  <action name="actionDark">
+   <property name="text">
+    <string>Dark</string>
+   </property>
+  </action>
+  <action name="actionLight">
+   <property name="text">
+    <string>Light</string>
    </property>
   </action>
  </widget>
@@ -721,7 +742,6 @@ max-width:300px;</string>
   <tabstop>driverControl</tabstop>
   <tabstop>startButton</tabstop>
   <tabstop>executeAllButton</tabstop>
-  <tabstop>tabWidget</tabstop>
   <tabstop>slider</tabstop>
   <tabstop>scrollArea</tabstop>
   <tabstop>previousButton</tabstop>

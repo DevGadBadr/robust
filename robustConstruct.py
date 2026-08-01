@@ -1,7 +1,7 @@
 import json
 from PyQt5 import QtWidgets
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QDialog
+from PyQt5.QtWidgets import QApplication, QDialog
 from scrapeJobsHelpers import clickButtonJob, getUrlJob, inputFieldJob, extractTextJob, extractLinksJob
 from ui.uimain import Ui_RobustMain
 from newJobConstruct import NewJobConstruct
@@ -13,6 +13,7 @@ from scrapeJobs import abstractScrapeJob
 from elementSetup import setUpSplitters
 import win32gui
 import win32con
+from ui.manageTheme import DarkPalette, LightPalette, enableLightTitlebar, isWindowsDarkMode, enableDarkTitlebar
 
 class RobustConstruct(Ui_RobustMain):
 
@@ -63,6 +64,16 @@ class RobustConstruct(Ui_RobustMain):
         self.windowWidth = settingsFile.get("windowWidth", 1020)
         self.windowHeight = settingsFile.get("windowHeight", 821)
         self.windowMaximized = settingsFile.get("windowMaximized", False)
+        self.initialTheme = isWindowsDarkMode()
+        if settingsFile.get("theme") == "dark":
+                self.applyDarkTheme(persist=False)
+        elif settingsFile.get("theme") == "light":
+            self.applyLightTheme(persist=False)
+        else:
+            if self.initialTheme:
+                self.applyDarkTheme(persist=False)
+            else:
+                self.applyLightTheme(persist=False)
 
     def restoreWindowGeometry(self):
         self.mainWindow.setGeometry(self.windowX, self.windowY, self.windowWidth, self.windowHeight)
@@ -97,6 +108,37 @@ class RobustConstruct(Ui_RobustMain):
         self.addScrapeJobButton.clicked.connect(self.openAddJobDialog)
         self.mainDefaultBox.currentTextChanged.connect(self.handleMainJobChange)
         self.exitAction.triggered.connect(self.mainWindow.close)
+        self.actionDark.triggered.connect(lambda: self.applyDarkTheme())
+        self.actionLight.triggered.connect(lambda: self.applyLightTheme())
+
+    def applyDarkTheme(self, persist=True):
+        QApplication.setPalette(DarkPalette)
+        enableDarkTitlebar(int(self.mainWindow.winId()))
+        self.refreshThemedWidgets()
+        if persist:
+            self.saveTheme("dark")
+
+    def applyLightTheme(self, persist=True):
+        QApplication.setPalette(LightPalette)
+        enableLightTitlebar(int(self.mainWindow.winId()))
+        self.refreshThemedWidgets()
+        if persist:
+            self.saveTheme("light")
+
+    def refreshThemedWidgets(self):
+        # Re-polish so Fusion picks up the new Button palette on existing widgets
+        app = QApplication.instance()
+        for widget in app.allWidgets():
+            app.style().unpolish(widget)
+            app.style().polish(widget)
+            widget.update()
+
+    def saveTheme(self, theme):
+        with open("./resources/settings.json") as file:
+            settings = json.load(file)
+        settings["theme"] = theme
+        with open("./resources/settings.json", "w") as file:
+            json.dump(settings, file)
 
     def handleMainJobChange(self):
         if not self.intitializing:
@@ -175,9 +217,16 @@ class RobustConstruct(Ui_RobustMain):
             self.nextDriverNumber += 1
 
         if event['type'] == "driverDied":
-            driverNumber = self.worker.driverManager.drivers[event['uuid']]['number']
+            uuid = event['uuid']
+            driverNumber = self.worker.driverManager.drivers[uuid]['number']
             self.postToUI("status", {"msg": "Driver " + str(driverNumber) + " Died"})
-            self.worker.driverManager.drivers[event['uuid']]['dropped'] = True
+            if 'settingsWindow' in self.worker.driverManager.drivers[uuid].keys():
+                self.worker.driverManager.drivers[uuid]['settingsWindow'].close()
+            driverInstance = self.scrollAreaWidgetContents.findChild(QtWidgets.QWidget, "driverInstance" + str(uuid))
+            if driverInstance:
+                driverInstance.deleteLater()
+            self.removeDriverTab(uuid)
+            self.worker.driverManager.drivers[uuid]['dropped'] = True
             self.updateCounter()
 
         if event['type'] == "driverReady":
@@ -199,6 +248,7 @@ class RobustConstruct(Ui_RobustMain):
             direction = event['direction']
             result = event['result']
             artifact = event.get("artifact")
+            screenshot = event.get("screenshot")
             executeClass = self.worker.driverManager.drivers[event['uuid']]['scrapeJobClass']
             actions = executeClass.actions
             for action in actions:
@@ -222,6 +272,8 @@ class RobustConstruct(Ui_RobustMain):
             if "settingsWindowClass" in self.worker.driverManager.drivers[event['uuid']].keys():
                 jobSettingsClass = self.worker.driverManager.drivers[event['uuid']]['settingsWindowClass']
                 jobSettingsClass.updateJobExecutionStatus(jobuuid, direction, result)
+            if screenshot:
+                self.postToUI("updateScreenshot", {"uuid": event['uuid'], "screenshot": screenshot})
 
     def QThreadFinished(self, event):
         self.startButton.setDisabled(False)
@@ -235,10 +287,29 @@ class RobustConstruct(Ui_RobustMain):
         if 'settingsWindow' in self.worker.driverManager.drivers[uuid].keys():
             self.worker.driverManager.drivers[uuid]['settingsWindow'].close()   
         driverInstance = self.scrollAreaWidgetContents.findChild(QtWidgets.QWidget,"driverInstance"+str(uuid))
-        driverInstance.deleteLater()
+        if driverInstance:
+            driverInstance.deleteLater()
+        self.removeDriverTab(uuid)
         self.postToUI("status", {"msg": "Driver " + str(driverNumber) + " Closed"})
         self.worker.driverManager.drivers[uuid]['dropped'] = True
         self.updateCounter()
+
+    def updateDriverScreenshot(self, uuid, png_bytes):
+        pngLabel = self.driversTabWidget.findChild(QtWidgets.QLabel, "driverScreenshot" + str(uuid))
+        if not pngLabel or not png_bytes:
+            return
+        pixmap = QtGui.QPixmap()
+        pixmap.loadFromData(png_bytes)
+        pngLabel.setPixmap(pixmap)
+
+    def removeDriverTab(self, uuid):
+        pngContainer = self.driversTabWidget.findChild(QtWidgets.QWidget, "driverTab" + str(uuid))
+        if not pngContainer:
+            return
+        index = self.driversTabWidget.indexOf(pngContainer)
+        if index >= 0:
+            self.driversTabWidget.removeTab(index)
+        pngContainer.deleteLater()
 
     def closeAllDrivers(self):
         print("Closing All Drivers")
@@ -268,6 +339,8 @@ class RobustConstruct(Ui_RobustMain):
                 self.statusArea.append(event['msg'])
             elif updateType == "createInstance":
                 self.createDriverInstances(event)
+            elif updateType == "updateScreenshot":
+                self.updateDriverScreenshot(event['uuid'], event['screenshot'])
             elif updateType == "focusDriver":
                 hwnd = event['HWND']
                 if hwnd:
@@ -429,3 +502,14 @@ class RobustConstruct(Ui_RobustMain):
         self.nextDriverCount += 1
         self.scrollAreaLayout.activate()
         self.scrollToBottom()
+        # Create new tab for the new driver instance
+        pngContainer = QtWidgets.QWidget()
+        pngContainer.setObjectName("driverTab" + str(uuid))
+        pngLayout = QtWidgets.QHBoxLayout(pngContainer)
+        pngLayout.setContentsMargins(0, 0, 0, 0)
+        pngLabel = QtWidgets.QLabel()
+        pngLabel.setObjectName("driverScreenshot" + str(uuid))
+        pngLabel.setPixmap(QtGui.QPixmap(""))
+        pngLabel.setScaledContents(True)
+        pngLayout.addWidget(pngLabel)
+        self.driversTabWidget.addTab(pngContainer, f"Driver {number}")
