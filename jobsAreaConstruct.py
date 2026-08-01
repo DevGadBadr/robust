@@ -21,6 +21,15 @@ class JobsAreaConstruct:
         self.resetLabelTimer = QtCore.QTimer()
         self.resetLabelTimer.setInterval(1500)
         self.resetLabelTimer.timeout.connect(self.resetStatusLabel)
+        self.armedPickButton = None
+        self.armedJobUuid = None
+        self.pickPollTimer = QtCore.QTimer()
+        self.pickPollTimer.setInterval(150)
+        self.pickPollTimer.timeout.connect(self.pollPickResult)
+
+    def isDriverHeadless(self):
+        driver = self.robustClass.worker.driverManager.drivers.get(self.scrapeuuid)
+        return bool(driver and driver.get('headless'))
 
     def bindWidgets(self):
         self.jobsGroupBox = self.robustClass.jobsGroupBox
@@ -76,6 +85,7 @@ class JobsAreaConstruct:
         self.robustClass.activeJobsArea = self
 
     def deactivate(self):
+        self.forceCancelPick()
         self.disconnectChrome()
         self.syncJobRowWidgetsFromLayout()
         for jobWidget in self.jobRowWidgets:
@@ -115,6 +125,134 @@ class JobsAreaConstruct:
 
     def isActive(self):
         return getattr(self.robustClass, 'activeJobsArea', None) is self
+
+    def setPickButtonArmed(self, button, armed):
+        if self.armedPickButton is not None and self.armedPickButton is not button:
+            try:
+                self.armedPickButton.setStyleSheet("")
+            except RuntimeError:
+                pass
+        if button is None:
+            self.armedPickButton = None
+            self.armedJobUuid = None
+            return
+        button.setStyleSheet("background-color: #ADD8E6;" if armed else "")
+        if armed:
+            self.armedPickButton = button
+        else:
+            if self.armedPickButton is button:
+                self.armedPickButton = None
+                self.armedJobUuid = None
+
+    def pollPickResult(self):
+        if not self.armedJobUuid:
+            self.pickPollTimer.stop()
+            return
+        driver = self.robustClass.worker.driverManager.drivers.get(self.scrapeuuid)
+        if not driver or driver.get('dropped'):
+            self.forceCancelPick(sendCancel=False)
+            return
+        driver['threadQueue'].put(("elementPickPoll", {"jobuuid": self.armedJobUuid}))
+
+    def forceCancelPick(self, sendCancel=True):
+        wasArmed = self.armedJobUuid is not None
+        jobuuid = self.armedJobUuid
+        if sendCancel and wasArmed:
+            driver = self.robustClass.worker.driverManager.drivers.get(self.scrapeuuid)
+            if driver and not driver.get('dropped'):
+                driver['threadQueue'].put(("elementPickCancel", {"jobuuid": jobuuid}))
+        self.pickPollTimer.stop()
+        if self.armedPickButton is not None:
+            self.setPickButtonArmed(self.armedPickButton, False)
+        self.armedJobUuid = None
+
+    def togglePickHandle(self, button=None):
+        if button is None:
+            button = self.jobsGroupBox.sender()
+        if button is None:
+            return
+        jobWidget = button.parent()
+        jobuuid = jobWidget.property("uuid")
+        if not jobuuid:
+            name = jobWidget.objectName() or ""
+            if name.startswith("oneJob"):
+                jobuuid = name.replace("oneJob", "", 1)
+        if not jobuuid:
+            self.setStatusMessage("Save or select a job row first")
+            return
+        if self.isDriverHeadless():
+            self.setStatusMessage("Pick unavailable in headless mode")
+            return
+        rowUuid = str(jobuuid)
+        jobTypeSelector = jobWidget.findChild(QtWidgets.QComboBox, "jobTypeSelector" + rowUuid)
+        if jobTypeSelector and jobTypeSelector.currentText() == "Get URL":
+            self.setStatusMessage("Pick not used for Get URL jobs")
+            return
+        driver = self.robustClass.worker.driverManager.drivers.get(self.scrapeuuid)
+        if not driver or driver.get('dropped'):
+            return
+
+        if self.armedPickButton is button and self.armedJobUuid:
+            self.forceCancelPick(sendCancel=True)
+            self.setStatusMessage("Pick cancelled")
+            return
+
+        if self.armedJobUuid:
+            self.forceCancelPick(sendCancel=True)
+
+        self.armedJobUuid = rowUuid
+        self.setPickButtonArmed(button, True)
+        driver['threadQueue'].put(("elementPickStart", {"jobuuid": self.armedJobUuid}))
+        if not self.pickPollTimer.isActive():
+            self.pickPollTimer.start()
+        self.setStatusMessage("Picking element… Esc or Cancel to stop")
+
+    def applyPickedLocator(self, jobuuid, locatorType, locatorValue):
+        self.pickPollTimer.stop()
+        if self.armedPickButton is not None:
+            self.setPickButtonArmed(self.armedPickButton, False)
+        self.armedJobUuid = None
+        if not jobuuid:
+            return
+        jobWidget = self.findJobWidget(jobuuid)
+        if not jobWidget:
+            # also try property match
+            for w in self.jobRowWidgets:
+                if str(w.property("uuid")) == str(jobuuid) or w.objectName() == "oneJob" + str(jobuuid):
+                    jobWidget = w
+                    break
+        if not jobWidget:
+            self.setStatusMessage("Picked element but job row not found")
+            return
+        by_value = IDENTIFIER_VALUES.get(locatorType)
+        typeSelector = jobWidget.findChild(QtWidgets.QComboBox, "identifierTypeSelector" + str(jobuuid))
+        valueBox = jobWidget.findChild(QtWidgets.QLineEdit, "identifierValueBox" + str(jobuuid))
+        # object names use the row uuid from creation
+        if typeSelector is None or valueBox is None:
+            rowUuid = jobWidget.objectName().replace("oneJob", "", 1) if jobWidget.objectName() else str(jobuuid)
+            typeSelector = jobWidget.findChild(QtWidgets.QComboBox, "identifierTypeSelector" + rowUuid)
+            valueBox = jobWidget.findChild(QtWidgets.QLineEdit, "identifierValueBox" + rowUuid)
+        if typeSelector is not None and by_value is not None:
+            idx = typeSelector.findData(by_value)
+            if idx >= 0:
+                typeSelector.setCurrentIndex(idx)
+            else:
+                typeSelector.setCurrentText(locatorType)
+        if valueBox is not None:
+            valueBox.setText(locatorValue or "")
+        self.setStatusMessage("Locator applied — Save the job to keep it")
+
+    def onPickCancelled(self, jobuuid=None):
+        if self.armedJobUuid is None and self.armedPickButton is None:
+            return
+        if jobuuid is not None and self.armedJobUuid is not None and str(jobuuid) != str(self.armedJobUuid):
+            return
+        self.pickPollTimer.stop()
+        if self.armedPickButton is not None:
+            self.setPickButtonArmed(self.armedPickButton, False)
+        self.armedJobUuid = None
+        if self.isActive():
+            self.setStatusMessage("Pick cancelled")
 
     def resetStatusLabel(self):
         if self.isActive() and self.statusLabel:
@@ -312,6 +450,13 @@ class JobsAreaConstruct:
     def deleteJobHandle(self):
         button = self.jobsGroupBox.sender()
         jobWidget = button.parent()
+        jobuuid = jobWidget.property("uuid")
+        if not jobuuid:
+            name = jobWidget.objectName() or ""
+            if name.startswith("oneJob"):
+                jobuuid = name.replace("oneJob", "", 1)
+        if jobuuid and self.armedJobUuid and str(jobuuid) == str(self.armedJobUuid):
+            self.forceCancelPick(sendCancel=True)
         if jobWidget in self.jobRowWidgets:
             self.jobRowWidgets.remove(jobWidget)
         jobWidget.deleteLater()
@@ -495,6 +640,15 @@ class JobsAreaConstruct:
         valueBox.setObjectName("valueBox" + str(newJobUUID))
         valueBox.setPlaceholderText("Value")
         oneJobLayout.addWidget(valueBox)
+        jobPickButton = QtWidgets.QPushButton(oneJob)
+        jobPickButton.setText("")
+        pickIcon = QtGui.QIcon()
+        pickIcon.addPixmap(QtGui.QPixmap("./resources/cursor.svg"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        jobPickButton.setIcon(pickIcon)
+        jobPickButton.setObjectName("jobPickButton" + str(newJobUUID))
+        jobPickButton.setEnabled(False)
+        jobPickButton.clicked.connect(lambda _checked=False, b=jobPickButton: self.togglePickHandle(b))
+        oneJobLayout.addWidget(jobPickButton)
         doneCheckBox = QtWidgets.QCheckBox(oneJob)
         doneCheckBox.setObjectName("doneCheckBox" + str(newJobUUID))
         doneCheckBox.setEnabled(False)
@@ -569,11 +723,15 @@ class JobsAreaConstruct:
         self.nextJobNumber += 1
 
         def jobTypeChangedHandle(text):
+            canPick = text != "Get URL" and not self.isDriverHeadless()
+            jobPickButton.setEnabled(canPick)
             if text == "Get URL":
                 identifierTypeSelector.setDisabled(True)
                 identifierValueBox.setDisabled(True)
                 valueBox.setDisabled(False)
                 self.removeArtifactButton(oneJob, newJobUUID)
+                if self.armedPickButton is jobPickButton:
+                    self.forceCancelPick(sendCancel=True)
             elif text == "Click Button":
                 valueBox.setDisabled(True)
                 identifierTypeSelector.setDisabled(False)
@@ -591,3 +749,5 @@ class JobsAreaConstruct:
                 self.removeArtifactButton(oneJob, newJobUUID)
 
         jobTypeSelector.currentTextChanged.connect(jobTypeChangedHandle)
+        # Apply initial enable state for default job type
+        jobTypeChangedHandle(jobTypeSelector.currentText())

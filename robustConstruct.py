@@ -13,7 +13,25 @@ from scrapeJobs import abstractScrapeJob
 from elementSetup import setUpSplitters
 import win32gui
 import win32con
+from chromeEmbed import embedChrome, resizeChrome, detachChrome
 from ui.manageTheme import DarkPalette, LightPalette, enableLightTitlebar, isWindowsDarkMode, enableDarkTitlebar
+
+
+class DriverHostWidget(QtWidgets.QWidget):
+    """Host that keeps an embedded Chrome HWND sized to itself."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.chromeHwnd = None
+        self.driverUuid = None
+
+    def setChromeHwnd(self, hwnd):
+        self.chromeHwnd = hwnd
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self.chromeHwnd:
+            resizeChrome(self.chromeHwnd, self)
 
 class RobustConstruct(Ui_RobustMain):
 
@@ -220,6 +238,12 @@ class RobustConstruct(Ui_RobustMain):
             uuid = event['uuid']
             driverNumber = self.worker.driverManager.drivers[uuid]['number']
             self.postToUI("status", {"msg": "Driver " + str(driverNumber) + " Died"})
+            jobsArea = self.worker.driverManager.drivers[uuid].get('settingsWindowClass')
+            if jobsArea is not None:
+                try:
+                    jobsArea.forceCancelPick()
+                except Exception:
+                    pass
             if 'settingsWindow' in self.worker.driverManager.drivers[uuid].keys():
                 self.worker.driverManager.drivers[uuid]['settingsWindow'].close()
             driverInstance = self.scrollAreaWidgetContents.findChild(QtWidgets.QWidget, "driverInstance" + str(uuid))
@@ -248,7 +272,6 @@ class RobustConstruct(Ui_RobustMain):
             direction = event['direction']
             result = event['result']
             artifact = event.get("artifact")
-            screenshot = event.get("screenshot")
             executeClass = self.worker.driverManager.drivers[event['uuid']]['scrapeJobClass']
             actions = executeClass.actions
             for action in actions:
@@ -272,8 +295,12 @@ class RobustConstruct(Ui_RobustMain):
             if "settingsWindowClass" in self.worker.driverManager.drivers[event['uuid']].keys():
                 jobSettingsClass = self.worker.driverManager.drivers[event['uuid']]['settingsWindowClass']
                 jobSettingsClass.updateJobExecutionStatus(jobuuid, direction, result)
-            if screenshot:
-                self.postToUI("updateScreenshot", {"uuid": event['uuid'], "screenshot": screenshot})
+
+        if event['type'] == "elementPicked":
+            self.postToUI("elementPicked", event)
+
+        if event['type'] == "elementPickCancelled":
+            self.postToUI("elementPickCancelled", event)
 
     def QThreadFinished(self, event):
         self.startButton.setDisabled(False)
@@ -283,10 +310,17 @@ class RobustConstruct(Ui_RobustMain):
     def closeDriverInstance(self, uuid):
         driverNumber = self.worker.driverManager.drivers[uuid]['number']
         print("Closing Driver " + str(driverNumber))
+        jobsArea = self.worker.driverManager.drivers[uuid].get('settingsWindowClass')
+        if jobsArea is not None:
+            try:
+                jobsArea.forceCancelPick()
+            except Exception:
+                pass
+        self.detachDriverChrome(uuid)
         self.worker.driverManager.drivers[uuid]['threadQueue'].put("close")
         if 'settingsWindow' in self.worker.driverManager.drivers[uuid].keys():
-            self.worker.driverManager.drivers[uuid]['settingsWindow'].close()   
-        driverInstance = self.scrollAreaWidgetContents.findChild(QtWidgets.QWidget,"driverInstance"+str(uuid))
+            self.worker.driverManager.drivers[uuid]['settingsWindow'].close()
+        driverInstance = self.scrollAreaWidgetContents.findChild(QtWidgets.QWidget, "driverInstance" + str(uuid))
         if driverInstance:
             driverInstance.deleteLater()
         self.removeDriverTab(uuid)
@@ -294,22 +328,46 @@ class RobustConstruct(Ui_RobustMain):
         self.worker.driverManager.drivers[uuid]['dropped'] = True
         self.updateCounter()
 
-    def updateDriverScreenshot(self, uuid, png_bytes):
-        pngLabel = self.driversTabWidget.findChild(QtWidgets.QLabel, "driverScreenshot" + str(uuid))
-        if not pngLabel or not png_bytes:
+    def detachDriverChrome(self, uuid):
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver:
             return
-        pixmap = QtGui.QPixmap()
-        pixmap.loadFromData(png_bytes)
-        pngLabel.setPixmap(pixmap)
+        host = self.driversTabWidget.findChild(DriverHostWidget, "driverHost" + str(uuid))
+        hwnd = driver.get('HWND')
+        orig = None
+        if host is not None:
+            orig = host.property("_chromeOrigStyle")
+            host.setChromeHwnd(None)
+        if hwnd and driver.get('embedded'):
+            detachChrome(hwnd, orig)
+            driver['embedded'] = False
+
+    def embedDriverChrome(self, uuid):
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver or driver.get('headless'):
+            return
+        hwnd = driver.get('HWND')
+        host = self.driversTabWidget.findChild(DriverHostWidget, "driverHost" + str(uuid))
+        if not hwnd or host is None:
+            return
+        try:
+            win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+        except Exception:
+            pass
+        if embedChrome(hwnd, host):
+            host.setChromeHwnd(hwnd)
+            driver['embedded'] = True
+            driver['visible'] = True
 
     def removeDriverTab(self, uuid):
-        pngContainer = self.driversTabWidget.findChild(QtWidgets.QWidget, "driverTab" + str(uuid))
-        if not pngContainer:
+        self.detachDriverChrome(uuid)
+        tabContainer = self.driversTabWidget.findChild(QtWidgets.QWidget, "driverTab" + str(uuid))
+        if not tabContainer:
             return
-        index = self.driversTabWidget.indexOf(pngContainer)
+        index = self.driversTabWidget.indexOf(tabContainer)
         if index >= 0:
             self.driversTabWidget.removeTab(index)
-        pngContainer.deleteLater()
+        tabContainer.deleteLater()
 
     def closeAllDrivers(self):
         print("Closing All Drivers")
@@ -339,25 +397,63 @@ class RobustConstruct(Ui_RobustMain):
                 self.statusArea.append(event['msg'])
             elif updateType == "createInstance":
                 self.createDriverInstances(event)
-            elif updateType == "updateScreenshot":
-                self.updateDriverScreenshot(event['uuid'], event['screenshot'])
+            elif updateType == "embedDriver":
+                self.embedDriverChrome(event['uuid'])
             elif updateType == "focusDriver":
                 hwnd = event['HWND']
                 if hwnd:
-                    win32gui.SetForegroundWindow(hwnd)
-            elif updateType == "showDriver":
-                hwnd = event['HWND']
-                if hwnd:
-                    win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
-                    win32gui.SetForegroundWindow(hwnd)
-            elif updateType == "hideDriver":
-                hwnd = event['HWND']
-                if hwnd:
-                    win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
+                    try:
+                        win32gui.SetForegroundWindow(hwnd)
+                    except Exception:
+                        pass
+            elif updateType == "popOutDriver":
+                self.popOutDriver(event['uuid'])
+            elif updateType == "reEmbedDriver":
+                self.embedDriverChrome(event['uuid'])
+            elif updateType == "elementPicked":
+                self.handleElementPicked(event)
+            elif updateType == "elementPickCancelled":
+                self.handleElementPickCancelled(event)
             elif updateType == "cleanStatus":
                 event()
         else:
             self.uiUpdateTimer.stop()
+
+    def popOutDriver(self, uuid):
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver or driver.get('headless'):
+            return
+        self.detachDriverChrome(uuid)
+        hwnd = driver.get('HWND')
+        if hwnd:
+            try:
+                win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+                win32gui.SetForegroundWindow(hwnd)
+            except Exception:
+                pass
+        driver['visible'] = True
+
+    def handleElementPicked(self, event):
+        uuid = event.get('uuid')
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver:
+            return
+        jobsArea = driver.get('settingsWindowClass')
+        if jobsArea is not None:
+            jobsArea.applyPickedLocator(
+                event.get('jobuuid'),
+                event.get('locatorType'),
+                event.get('locatorValue'),
+            )
+
+    def handleElementPickCancelled(self, event):
+        uuid = event.get('uuid')
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver:
+            return
+        jobsArea = driver.get('settingsWindowClass')
+        if jobsArea is not None:
+            jobsArea.onPickCancelled(event.get('jobuuid'))
 
     def executeAllDrivers(self):
         for uuid, driver in self.worker.driverManager.drivers.items():
@@ -449,12 +545,12 @@ class RobustConstruct(Ui_RobustMain):
             self.worker.driverManager.drivers[uuid]['threadQueue'].put((func,{}))
         def eyeButtonHandle():
             driver = self.worker.driverManager.drivers[uuid]
-            if driver['visible']:
-                self.postToUI("hideDriver", {"HWND": driver['HWND']})
-                driver['visible'] = False
+            if driver.get('headless'):
+                return
+            if driver.get('embedded'):
+                self.postToUI("popOutDriver", {"uuid": uuid})
             else:
-                self.postToUI("showDriver", {"HWND": driver['HWND']})
-                driver['visible'] = True
+                self.postToUI("reEmbedDriver", {"uuid": uuid})
         driverDefaultUrl.currentTextChanged.connect(handleDriverScrapeJobChange)
         driverDefaultUrl.setCurrentText(self.mainDefaultBox.currentText())
         instanceLayout.addWidget(driverDefaultUrl)
@@ -493,6 +589,7 @@ class RobustConstruct(Ui_RobustMain):
         eyeButton.setIcon(eyeicon)
         eyeButton.setObjectName("eyeButton"+str(uuid))
         eyeButton.clicked.connect(eyeButtonHandle)
+        eyeButton.setEnabled(not self.worker.driverManager.drivers[uuid].get('headless', False))
         instanceLayout.addWidget(eyeButton)
         spacerItem1 = QtWidgets.QSpacerItem(10, 20, QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Minimum)
         instanceLayout.addItem(spacerItem1)
@@ -506,14 +603,22 @@ class RobustConstruct(Ui_RobustMain):
         self.nextDriverCount += 1
         self.scrollAreaLayout.activate()
         self.scrollToBottom()
-        # Create new tab for the new driver instance
-        pngContainer = QtWidgets.QWidget()
-        pngContainer.setObjectName("driverTab" + str(uuid))
-        pngLayout = QtWidgets.QHBoxLayout(pngContainer)
-        pngLayout.setContentsMargins(0, 0, 0, 0)
-        pngLabel = QtWidgets.QLabel()
-        pngLabel.setObjectName("driverScreenshot" + str(uuid))
-        pngLabel.setPixmap(QtGui.QPixmap(""))
-        pngLabel.setScaledContents(True)
-        pngLayout.addWidget(pngLabel)
-        self.driversTabWidget.addTab(pngContainer, f"Driver {number}")
+        # Live Chrome host tab (or headless placeholder)
+        tabContainer = QtWidgets.QWidget()
+        tabContainer.setObjectName("driverTab" + str(uuid))
+        tabLayout = QtWidgets.QHBoxLayout(tabContainer)
+        tabLayout.setContentsMargins(0, 0, 0, 0)
+        tabLayout.setSpacing(0)
+        isHeadless = self.worker.driverManager.drivers[uuid].get('headless', False)
+        if isHeadless:
+            placeholder = QtWidgets.QLabel("Headless — no live view")
+            placeholder.setAlignment(Qt.AlignCenter)
+            placeholder.setObjectName("driverHostPlaceholder" + str(uuid))
+            tabLayout.addWidget(placeholder)
+        else:
+            host = DriverHostWidget(tabContainer)
+            host.setObjectName("driverHost" + str(uuid))
+            host.driverUuid = uuid
+            tabLayout.addWidget(host)
+            QTimer.singleShot(0, lambda u=uuid: self.postToUI("embedDriver", {"uuid": u}))
+        self.driversTabWidget.addTab(tabContainer, f"Driver {number}")
