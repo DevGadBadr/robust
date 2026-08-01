@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QApplication, QDialog
 from scrapeJobsHelpers import clickButtonJob, getUrlJob, inputFieldJob, extractTextJob, extractLinksJob
 from ui.uimain import Ui_RobustMain
 from newJobConstruct import NewJobConstruct
-from jobsConstruct import JobsConstruct
+from jobsAreaConstruct import JobsAreaConstruct
 from PyQt5.QtCore import QTimer, Qt
 from workerThread import QWorker
 from collections import deque
@@ -429,12 +429,16 @@ class RobustConstruct(Ui_RobustMain):
             scrapeJobClass.initiateActions(actions)
             self.worker.driverManager.drivers[uuid]['scrapeJobClass'] = scrapeJobClass
         def controlButtonHandle():
-            jobsDialog = QDialog()
-            jobsDialogClass = JobsConstruct(self, driverDefaultUrl.currentText(), uuid)
-            jobsDialogClass.setupUi(jobsDialog, self.worker.driverManager.drivers[uuid]['number'])
-            self.worker.driverManager.drivers[uuid]['settingsWindow'] = jobsDialog
-            self.worker.driverManager.drivers[uuid]['settingsWindowClass'] = jobsDialogClass  
-            self.worker.driverManager.drivers[uuid]['settingsWindow'].show()
+            driver = self.worker.driverManager.drivers[uuid]
+            existing = driver.get('settingsWindowClass')
+            if existing is None:
+                jobsAreaClass = JobsAreaConstruct(
+                    self, driverDefaultUrl.currentText(), uuid, driver['number']
+                )
+                jobsAreaClass.setupUi()
+                driver['settingsWindowClass'] = jobsAreaClass
+            else:
+                existing.activate()
         def nextButtonHandle():
             executeClass = self.worker.driverManager.drivers[uuid]['scrapeJobClass']
             func = executeClass.executeNextAction
