@@ -785,6 +785,17 @@
                           </widget>
                          </item>
                          <item>
+                          <widget class="QPushButton" name="jobPickButton">
+                           <property name="text">
+                            <string/>
+                           </property>
+                           <property name="icon">
+                            <iconset>
+                             <normaloff>../resources/cursor.svg</normaloff>../resources/cursor.svg</iconset>
+                           </property>
+                          </widget>
+                         </item>
+                         <item>
                           <widget class="QCheckBox" name="doneCheckBox">
                            <property name="enabled">
                             <bool>false</bool>
