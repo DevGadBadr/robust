@@ -55,7 +55,7 @@ class JobsConstruct(Ui_JobsDialog):
                 url = kwargs.get("url")
                 isexecuted = kwargs.get("isexecuted", False)
                 self.addJobHandle()
-                lastJobWidget = self.groupBox.findChild(QtWidgets.QWidget, "oneJob"+str(uuid))
+                lastJobWidget = self.jobsGroupBox.findChild(QtWidgets.QWidget, "oneJob"+str(uuid))
                 lastJobWidget.setProperty("uuid", uuid)
                 jobTypeSelector = lastJobWidget.findChild(QtWidgets.QComboBox, "jobTypeSelector"+str(uuid))
                 jobTypeSelector.setCurrentText("Get URL")
@@ -68,7 +68,7 @@ class JobsConstruct(Ui_JobsDialog):
                 identifierValue = kwargs.get("identifier_value")
                 isexecuted = kwargs.get("isexecuted", False)
                 self.addJobHandle()
-                lastJobWidget = self.groupBox.findChild(QtWidgets.QWidget, "oneJob"+str(uuid))
+                lastJobWidget = self.jobsGroupBox.findChild(QtWidgets.QWidget, "oneJob"+str(uuid))
                 lastJobWidget.setProperty("uuid", uuid)
                 jobTypeSelector = lastJobWidget.findChild(QtWidgets.QComboBox, "jobTypeSelector"+str(uuid))
                 jobTypeSelector.setCurrentText("Click Button")
@@ -84,7 +84,7 @@ class JobsConstruct(Ui_JobsDialog):
                 value = kwargs.get("value")
                 isexecuted = kwargs.get("isexecuted", False)
                 self.addJobHandle()
-                lastJobWidget = self.groupBox.findChild(QtWidgets.QWidget, "oneJob"+str(uuid))
+                lastJobWidget = self.jobsGroupBox.findChild(QtWidgets.QWidget, "oneJob"+str(uuid))
                 lastJobWidget.setProperty("uuid", uuid)
                 jobTypeSelector = lastJobWidget.findChild(QtWidgets.QComboBox, "jobTypeSelector"+str(uuid))
                 jobTypeSelector.setCurrentText("Input Field")
@@ -102,7 +102,7 @@ class JobsConstruct(Ui_JobsDialog):
                 identifierValue = kwargs.get("identifier_value")
                 isexecuted = kwargs.get("isexecuted", False)
                 self.addJobHandle()
-                lastJobWidget = self.groupBox.findChild(QtWidgets.QWidget, "oneJob"+str(uuid))
+                lastJobWidget = self.jobsGroupBox.findChild(QtWidgets.QWidget, "oneJob"+str(uuid))
                 lastJobWidget.setProperty("uuid", uuid)
                 jobTypeSelector = lastJobWidget.findChild(QtWidgets.QComboBox, "jobTypeSelector"+str(uuid))
                 jobTypeSelector.setCurrentText("Extract Text")
@@ -117,7 +117,7 @@ class JobsConstruct(Ui_JobsDialog):
                 identifierValue = kwargs.get("identifier_value")
                 isexecuted = kwargs.get("isexecuted", False)
                 self.addJobHandle()
-                lastJobWidget = self.groupBox.findChild(QtWidgets.QWidget, "oneJob"+str(uuid))
+                lastJobWidget = self.jobsGroupBox.findChild(QtWidgets.QWidget, "oneJob"+str(uuid))
                 lastJobWidget.setProperty("uuid", uuid)
                 jobTypeSelector = lastJobWidget.findChild(QtWidgets.QComboBox, "jobTypeSelector"+str(uuid))
                 jobTypeSelector.setCurrentText("Extract Links")
@@ -136,13 +136,13 @@ class JobsConstruct(Ui_JobsDialog):
         if result == "Previous Done":
             self.setStatusMessage("No more previous actions to execute.")
             return
-        checkBox = self.groupBox.findChild(QtWidgets.QCheckBox, "doneCheckBox"+str(jobuuid))
+        checkBox = self.jobsGroupBox.findChild(QtWidgets.QCheckBox, "doneCheckBox"+str(jobuuid))
         if checkBox:
             if direction == "forward":
                 checkBox.setChecked(True)
             elif direction == "backward":
                 checkBox.setChecked(False)  
-        jobWidget = self.groupBox.findChild(QtWidgets.QWidget, "oneJob"+str(jobuuid))
+        jobWidget = self.jobsGroupBox.findChild(QtWidgets.QWidget, "oneJob"+str(jobuuid))
         jobName = jobWidget.findChild(QtWidgets.QLabel)
         self.setStatusMessage(f"{jobName.text()} executed with result: {result}")
 
@@ -217,7 +217,7 @@ class JobsConstruct(Ui_JobsDialog):
         self.opaceEffect.setOpacity(0)
             
     def deleteJobHandle(self): 
-        button = self.groupBox.sender()
+        button = self.jobsGroupBox.sender()
         jobWidget = button.parent()
         jobWidget.deleteLater()
         jobuuid = jobWidget.property("uuid")
@@ -243,7 +243,7 @@ class JobsConstruct(Ui_JobsDialog):
             artifactButton.deleteLater()
 
     def openJobContentHandle(self):
-        button = self.groupBox.sender()
+        button = self.jobsGroupBox.sender()
         jobWidget = button.parent()
         jobuuid = jobWidget.property("uuid")
         content = ""
@@ -347,7 +347,7 @@ class JobsConstruct(Ui_JobsDialog):
         button = event.button()
         if button != Qt.LeftButton:
             return
-        jobs = self.groupBox.findChildren(QtWidgets.QWidget, QtCore.QRegExp("oneJob.*"))
+        jobs = self.jobsGroupBox.findChildren(QtWidgets.QWidget, QtCore.QRegExp("oneJob.*"))
         for job in jobs:
             jobName = job.findChild(QtWidgets.QLabel)
             jobName.setCursor(Qt.OpenHandCursor)

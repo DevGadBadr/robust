@@ -6,7 +6,7 @@ def setUpSplitters(robustClass):
     hSplitter: QtWidgets.QSplitter = robustClass.mainHorizontalSplitter
     vSplitter: QtWidgets.QSplitter = robustClass.controlVerticalSplitter
     minWidth = 500
-    minHeight = 200
+    minHeight = 100
 
     robustClass.driverWindow.setMinimumWidth(minWidth)
     robustClass.controlPanel.setMinimumWidth(minWidth)
