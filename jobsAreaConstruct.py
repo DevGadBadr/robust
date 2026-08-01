@@ -94,6 +94,20 @@ class JobsAreaConstruct:
         if getattr(self.robustClass, 'activeJobsArea', None) is self:
             self.robustClass.activeJobsArea = None
 
+    def cleanup(self):
+        wasActive = getattr(self.robustClass, 'activeJobsArea', None) is self
+        self.forceCancelPick()
+        if wasActive:
+            self.deactivate()
+            self.jobsGroupBox.setTitle("Jobs")
+            self.statusLabel.setText("")
+            if getattr(self, 'opaceEffect', None) is not None:
+                self.opaceEffect.setOpacity(0)
+            self.saveOrderButton.setEnabled(False)
+        for jobWidget in self.jobRowWidgets:
+            jobWidget.deleteLater()
+        self.jobRowWidgets = []
+
     def syncJobRowWidgetsFromLayout(self):
         if getattr(self.robustClass, 'activeJobsArea', None) is not self:
             return

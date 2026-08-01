@@ -136,10 +136,17 @@ class DriverManager(QObject):
                         })
             else:
                 result, jobuuid, direction, artifact = func()
+                screenshot = None
+                if oneDriver.get("headless"):
+                    try:
+                        screenshot = driver.get_screenshot_as_png()
+                    except Exception:
+                        screenshot = None
                 self.status.emit({
                     "type": "driverResult",
                     "result": result,
                     "artifact": artifact,
+                    "screenshot": screenshot,
                     "uuid": driverUUID,
                     "jobuuid": jobuuid,
                     "direction": direction,

@@ -1,7 +1,7 @@
 import json
 from PyQt5 import QtWidgets
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QApplication, QDialog
+from PyQt5.QtWidgets import QApplication, QDialog, QGraphicsOpacityEffect
 from scrapeJobsHelpers import clickButtonJob, getUrlJob, inputFieldJob, extractTextJob, extractLinksJob
 from ui.uimain import Ui_RobustMain
 from newJobConstruct import NewJobConstruct
@@ -51,6 +51,7 @@ class RobustConstruct(Ui_RobustMain):
         self.intitializing = True
         self.driverInstancePlaceHolder.deleteLater()
         self.initiateVariables()
+        self.clearJobsAreaPanel()
         self.connectActions()
         self.initiateWorker()
         self.loadExistingJobs()
@@ -59,6 +60,19 @@ class RobustConstruct(Ui_RobustMain):
         setUpSplitters(self)
         self.intitializing = False
         self.startButton.click()
+
+    def clearJobsAreaPanel(self):
+        if getattr(self, 'oneJob', None) is not None:
+            self.oneJob.deleteLater()
+            self.oneJob = None
+        self._jobsTemplateRemoved = True
+        self.jobsGroupBox.setTitle("Jobs")
+        self.statusLabel.setText("")
+        effect = QGraphicsOpacityEffect()
+        effect.setOpacity(0)
+        self.saveOrderButton.setGraphicsEffect(effect)
+        self.saveOrderButton.setEnabled(False)
+        self.activeJobsArea = None
 
     def loadExistingJobs(self):
         with open("./resources/jobs.json", "r") as f:
@@ -238,19 +252,21 @@ class RobustConstruct(Ui_RobustMain):
             uuid = event['uuid']
             driverNumber = self.worker.driverManager.drivers[uuid]['number']
             self.postToUI("status", {"msg": "Driver " + str(driverNumber) + " Died"})
-            jobsArea = self.worker.driverManager.drivers[uuid].get('settingsWindowClass')
+            driver = self.worker.driverManager.drivers[uuid]
+            jobsArea = driver.get('settingsWindowClass')
             if jobsArea is not None:
                 try:
-                    jobsArea.forceCancelPick()
+                    jobsArea.cleanup()
                 except Exception:
                     pass
-            if 'settingsWindow' in self.worker.driverManager.drivers[uuid].keys():
-                self.worker.driverManager.drivers[uuid]['settingsWindow'].close()
+                driver['settingsWindowClass'] = None
+            if 'settingsWindow' in driver.keys():
+                driver['settingsWindow'].close()
             driverInstance = self.scrollAreaWidgetContents.findChild(QtWidgets.QWidget, "driverInstance" + str(uuid))
             if driverInstance:
                 driverInstance.deleteLater()
             self.removeDriverTab(uuid)
-            self.worker.driverManager.drivers[uuid]['dropped'] = True
+            driver['dropped'] = True
             self.updateCounter()
 
         if event['type'] == "driverReady":
@@ -295,6 +311,9 @@ class RobustConstruct(Ui_RobustMain):
             if "settingsWindowClass" in self.worker.driverManager.drivers[event['uuid']].keys():
                 jobSettingsClass = self.worker.driverManager.drivers[event['uuid']]['settingsWindowClass']
                 jobSettingsClass.updateJobExecutionStatus(jobuuid, direction, result)
+            screenshot = event.get("screenshot")
+            if screenshot:
+                self.postToUI("updateScreenshot", {"uuid": event['uuid'], "screenshot": screenshot})
 
         if event['type'] == "elementPicked":
             self.postToUI("elementPicked", event)
@@ -308,24 +327,26 @@ class RobustConstruct(Ui_RobustMain):
         self.executeAllButton.setDisabled(False)
         
     def closeDriverInstance(self, uuid):
-        driverNumber = self.worker.driverManager.drivers[uuid]['number']
+        driver = self.worker.driverManager.drivers[uuid]
+        driverNumber = driver['number']
         print("Closing Driver " + str(driverNumber))
-        jobsArea = self.worker.driverManager.drivers[uuid].get('settingsWindowClass')
+        jobsArea = driver.get('settingsWindowClass')
         if jobsArea is not None:
             try:
-                jobsArea.forceCancelPick()
+                jobsArea.cleanup()
             except Exception:
                 pass
+            driver['settingsWindowClass'] = None
         self.detachDriverChrome(uuid)
-        self.worker.driverManager.drivers[uuid]['threadQueue'].put("close")
-        if 'settingsWindow' in self.worker.driverManager.drivers[uuid].keys():
-            self.worker.driverManager.drivers[uuid]['settingsWindow'].close()
+        driver['threadQueue'].put("close")
+        if 'settingsWindow' in driver.keys():
+            driver['settingsWindow'].close()
         driverInstance = self.scrollAreaWidgetContents.findChild(QtWidgets.QWidget, "driverInstance" + str(uuid))
         if driverInstance:
             driverInstance.deleteLater()
         self.removeDriverTab(uuid)
         self.postToUI("status", {"msg": "Driver " + str(driverNumber) + " Closed"})
-        self.worker.driverManager.drivers[uuid]['dropped'] = True
+        driver['dropped'] = True
         self.updateCounter()
 
     def detachDriverChrome(self, uuid):
@@ -381,6 +402,14 @@ class RobustConstruct(Ui_RobustMain):
         print("UI Status Cleaned")
         self.startButton.setDisabled(False)
 
+    def updateDriverScreenshot(self, uuid, png_bytes):
+        pngLabel = self.driversTabWidget.findChild(QtWidgets.QLabel, "driverScreenshot" + str(uuid))
+        if not pngLabel or not png_bytes:
+            return
+        pixmap = QtGui.QPixmap()
+        pixmap.loadFromData(png_bytes)
+        pngLabel.setPixmap(pixmap)
+
     def updateCounter(self):
         currentActiveDrivers = len(self.worker.driverManager.drivers) - sum(1 for driver in self.worker.driverManager.drivers.values() if driver['dropped'])
         self.countNumber.setText(str(currentActiveDrivers))
@@ -397,6 +426,8 @@ class RobustConstruct(Ui_RobustMain):
                 self.statusArea.append(event['msg'])
             elif updateType == "createInstance":
                 self.createDriverInstances(event)
+            elif updateType == "updateScreenshot":
+                self.updateDriverScreenshot(event['uuid'], event['screenshot'])
             elif updateType == "embedDriver":
                 self.embedDriverChrome(event['uuid'])
             elif updateType == "focusDriver":
@@ -611,10 +642,11 @@ class RobustConstruct(Ui_RobustMain):
         tabLayout.setSpacing(0)
         isHeadless = self.worker.driverManager.drivers[uuid].get('headless', False)
         if isHeadless:
-            placeholder = QtWidgets.QLabel("Headless — no live view")
-            placeholder.setAlignment(Qt.AlignCenter)
-            placeholder.setObjectName("driverHostPlaceholder" + str(uuid))
-            tabLayout.addWidget(placeholder)
+            pngLabel = QtWidgets.QLabel("Headless — waiting for screenshot")
+            pngLabel.setAlignment(Qt.AlignCenter)
+            pngLabel.setObjectName("driverScreenshot" + str(uuid))
+            pngLabel.setScaledContents(True)
+            tabLayout.addWidget(pngLabel)
         else:
             host = DriverHostWidget(tabContainer)
             host.setObjectName("driverHost" + str(uuid))
