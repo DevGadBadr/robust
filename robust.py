@@ -3,6 +3,8 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QDialog, QMainWindow
 import sys
 
+# This is the entry point for the application
+
 class RobustMain(RobustConstruct):
 
     def setupUi(self, dialog:QDialog):
