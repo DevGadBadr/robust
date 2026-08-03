@@ -324,9 +324,7 @@ class JobsAreaConstruct:
                 typeSelector.setCurrentText(locatorType)
         self.setRowLocatorContext(jobWidget, locatorContext)
         if valueBox is not None:
-            valueBox.blockSignals(True)
             valueBox.setText(locatorValue or "")
-            valueBox.blockSignals(False)
         if not verified:
             self.setStatusMessage("Locator applied but did not resolve: " + (error or "unknown reason"))
             return
