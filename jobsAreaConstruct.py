@@ -231,6 +231,11 @@ class JobsAreaConstruct:
         if not driver or driver.get('dropped'):
             self.forceCancelPick(sendCancel=False)
             return
+        # A poll round trip can outlast the timer interval, so never stack a
+        # second one behind a pending task; otherwise the queue grows unbounded
+        # and the picker keeps answering long after the user moved on.
+        if not driver['threadQueue'].empty():
+            return
         driver['threadQueue'].put(("elementPickPoll", {"jobuuid": self.armedJobUuid}))
 
     def forceCancelPick(self, sendCancel=True):
@@ -286,7 +291,7 @@ class JobsAreaConstruct:
             self.pickPollTimer.start()
         self.setStatusMessage("Picking element… Esc or Cancel to stop")
 
-    def applyPickedLocator(self, jobuuid, locatorType, locatorValue):
+    def applyPickedLocator(self, jobuuid, locatorType, locatorValue, locatorContext=None, verified=True, error=""):
         self.pickPollTimer.stop()
         if self.armedPickButton is not None:
             self.setPickButtonArmed(self.armedPickButton, False)
@@ -317,11 +322,54 @@ class JobsAreaConstruct:
                 typeSelector.setCurrentIndex(idx)
             else:
                 typeSelector.setCurrentText(locatorType)
+        self.setRowLocatorContext(jobWidget, locatorContext)
         if valueBox is not None:
+            valueBox.blockSignals(True)
             valueBox.setText(locatorValue or "")
-        self.setStatusMessage("Locator applied — Save the job to keep it")
+            valueBox.blockSignals(False)
+        if not verified:
+            self.setStatusMessage("Locator applied but did not resolve: " + (error or "unknown reason"))
+            return
+        scope = self.describeLocatorContext(locatorContext)
+        self.setStatusMessage(
+            ("Locator applied (" + scope + ") — Save the job to keep it")
+            if scope else "Locator applied — Save the job to keep it"
+        )
 
-    def onPickCancelled(self, jobuuid=None):
+    def setRowLocatorContext(self, jobWidget, locatorContext):
+        if jobWidget is None:
+            return
+        if locatorContext:
+            jobWidget.setProperty("locatorContext", json.dumps(locatorContext))
+        else:
+            jobWidget.setProperty("locatorContext", None)
+
+    def getRowLocatorContext(self, jobWidget):
+        if jobWidget is None:
+            return None
+        raw = jobWidget.property("locatorContext")
+        if not raw:
+            return None
+        try:
+            context = json.loads(raw)
+        except (TypeError, ValueError):
+            return None
+        return context if isinstance(context, dict) and context else None
+
+    def describeLocatorContext(self, locatorContext):
+        if not isinstance(locatorContext, dict):
+            return ""
+        parts = []
+        frames = locatorContext.get("frames") or []
+        if frames:
+            names = [str(frame.get("selector") or ("frame[" + str(frame.get("index")) + "]")) for frame in frames]
+            parts.append("in " + " > ".join(names))
+        hosts = locatorContext.get("hosts") or []
+        if hosts:
+            parts.append("shadow " + " > ".join(str(host) for host in hosts))
+        return ", ".join(parts)
+
+    def onPickCancelled(self, jobuuid=None, error=""):
         if self.armedJobUuid is None and self.armedPickButton is None:
             return
         if jobuuid is not None and self.armedJobUuid is not None and str(jobuuid) != str(self.armedJobUuid):
@@ -331,7 +379,7 @@ class JobsAreaConstruct:
             self.setPickButtonArmed(self.armedPickButton, False)
         self.armedJobUuid = None
         if self.isActive():
-            self.setStatusMessage("Pick cancelled")
+            self.setStatusMessage(("Pick failed: " + error) if error else "Pick cancelled")
 
     def resetStatusLabel(self):
         if self.isActive() and self.statusLabel:
@@ -379,6 +427,7 @@ class JobsAreaConstruct:
                 identifierTypeSelector.setCurrentIndex(identifierTypeSelector.findData(identifierType))
                 identifierValueBox = lastJobWidget.findChild(QtWidgets.QLineEdit, "identifierValueBox" + str(jobuuid))
                 identifierValueBox.setText(identifierValue)
+                self.setRowLocatorContext(lastJobWidget, kwargs.get("context"))
                 doneCheckBox = lastJobWidget.findChild(QtWidgets.QCheckBox, "doneCheckBox" + str(jobuuid))
                 doneCheckBox.setChecked(isexecuted)
             elif kwargs.get("jobtype") == "InputField":
@@ -395,6 +444,7 @@ class JobsAreaConstruct:
                 identifierTypeSelector.setCurrentIndex(identifierTypeSelector.findData(identifierType))
                 identifierValueBox = lastJobWidget.findChild(QtWidgets.QLineEdit, "identifierValueBox" + str(jobuuid))
                 identifierValueBox.setText(identifierValue)
+                self.setRowLocatorContext(lastJobWidget, kwargs.get("context"))
                 valueBox = lastJobWidget.findChild(QtWidgets.QLineEdit, "valueBox" + str(jobuuid))
                 valueBox.setText(value)
                 doneCheckBox = lastJobWidget.findChild(QtWidgets.QCheckBox, "doneCheckBox" + str(jobuuid))
@@ -413,6 +463,7 @@ class JobsAreaConstruct:
                 identifierTypeSelector.setCurrentIndex(identifierTypeSelector.findData(identifierType))
                 identifierValueBox = lastJobWidget.findChild(QtWidgets.QLineEdit, "identifierValueBox" + str(jobuuid))
                 identifierValueBox.setText(identifierValue)
+                self.setRowLocatorContext(lastJobWidget, kwargs.get("context"))
                 doneCheckBox = lastJobWidget.findChild(QtWidgets.QCheckBox, "doneCheckBox" + str(jobuuid))
                 doneCheckBox.setChecked(isexecuted)
             elif kwargs.get("jobtype") == "ExtractLinks":
@@ -428,6 +479,7 @@ class JobsAreaConstruct:
                 identifierTypeSelector.setCurrentIndex(identifierTypeSelector.findData(identifierType))
                 identifierValueBox = lastJobWidget.findChild(QtWidgets.QLineEdit, "identifierValueBox" + str(jobuuid))
                 identifierValueBox.setText(identifierValue)
+                self.setRowLocatorContext(lastJobWidget, kwargs.get("context"))
                 doneCheckBox = lastJobWidget.findChild(QtWidgets.QCheckBox, "doneCheckBox" + str(jobuuid))
                 doneCheckBox.setChecked(isexecuted)
         self.newjobflag = True
@@ -726,6 +778,9 @@ class JobsAreaConstruct:
         identifierValueBox.setObjectName("identifierValueBox" + str(newJobUUID))
         identifierValueBox.setPlaceholderText("Identifier Value")
         identifierValueBox.setDisabled(True)
+        # A hand written locator must not inherit the frame or shadow scope of a
+        # previously picked one, or it would be looked up in the wrong document.
+        identifierValueBox.textEdited.connect(lambda _text, w=oneJob: self.setRowLocatorContext(w, None))
         oneJobLayout.addWidget(identifierValueBox)
         valueBox = QtWidgets.QLineEdit(oneJob)
         valueBox.setObjectName("valueBox" + str(newJobUUID))
@@ -754,6 +809,7 @@ class JobsAreaConstruct:
             identifierType = identifierTypeSelector.currentData() if identifierTypeSelector.isEnabled() else None
             identifierValue = identifierValueBox.text() if identifierValueBox.isEnabled() else None
             value = valueBox.text() if valueBox.isEnabled() else None
+            locatorContext = self.getRowLocatorContext(oneJob)
             if jobType == "Get URL":
                 if not value.startswith(("http://", "https://")):
                     self.setStatusMessage("Invalid URL format. Please include http:// or https://")
@@ -770,7 +826,7 @@ class JobsAreaConstruct:
                 else:
                     oneJob.setProperty("uuid", newJobUUID)
                     doneCheckBox.setObjectName("doneCheckBox" + str(newJobUUID))
-                    saveMsg = self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addClickButtonJob(button_identifier=identifierType, identifier_value=identifierValue, owner=self.jobsFor, uuid=newJobUUID)
+                    saveMsg = self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addClickButtonJob(button_identifier=identifierType, identifier_value=identifierValue, context=locatorContext, owner=self.jobsFor, uuid=newJobUUID)
                     self.setStatusMessage(saveMsg)
             elif jobType == "Input Field":
                 if not identifierType or not identifierValue or not value:
@@ -779,7 +835,7 @@ class JobsAreaConstruct:
                 else:
                     oneJob.setProperty("uuid", newJobUUID)
                     doneCheckBox.setObjectName("doneCheckBox" + str(newJobUUID))
-                    saveMsg = self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addInputFieldJob(field_identifier=identifierType, identifier_value=identifierValue, value=value, owner=self.jobsFor, uuid=newJobUUID)
+                    saveMsg = self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addInputFieldJob(field_identifier=identifierType, identifier_value=identifierValue, value=value, context=locatorContext, owner=self.jobsFor, uuid=newJobUUID)
                     self.setStatusMessage(saveMsg)
             elif jobType == "Extract Text":
                 if not identifierType or not identifierValue:
@@ -788,7 +844,7 @@ class JobsAreaConstruct:
                 else:
                     oneJob.setProperty("uuid", newJobUUID)
                     doneCheckBox.setObjectName("doneCheckBox" + str(newJobUUID))
-                    saveMsg = self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addExtractTextJob(text_identifier=identifierType, identifier_value=identifierValue, owner=self.jobsFor, uuid=newJobUUID)
+                    saveMsg = self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addExtractTextJob(text_identifier=identifierType, identifier_value=identifierValue, context=locatorContext, owner=self.jobsFor, uuid=newJobUUID)
                     self.setStatusMessage(saveMsg)
             elif jobType == "Extract Links":
                 if not identifierType or not identifierValue:
@@ -797,7 +853,7 @@ class JobsAreaConstruct:
                 else:
                     oneJob.setProperty("uuid", newJobUUID)
                     doneCheckBox.setObjectName("doneCheckBox" + str(newJobUUID))
-                    saveMsg = self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addExtractLinksJob(link_identifier=identifierType, identifier_value=identifierValue, owner=self.jobsFor, uuid=newJobUUID)
+                    saveMsg = self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addExtractLinksJob(link_identifier=identifierType, identifier_value=identifierValue, context=locatorContext, owner=self.jobsFor, uuid=newJobUUID)
                     self.setStatusMessage(saveMsg)
             self.robustClass.refreshSiblingDrivers(self.jobsFor, exceptUuid=self.scrapeuuid)
 

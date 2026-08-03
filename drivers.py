@@ -11,6 +11,11 @@ import win32con
 import elementPicker
 
 
+# Consecutive failed polls tolerated while trying to restore a picker that a
+# navigation wiped, before the pick is given up on.
+MAX_PICK_RECOVERIES = 20
+
+
 class DriverManager(QObject):
     drivers: dict = {}
     threads: list = []
@@ -52,6 +57,8 @@ class DriverManager(QObject):
             "embedded": False,
             "headless": isHeadless,
             "pickArmed": False,
+            "pickJobUuid": None,
+            "pickRecoveries": 0,
         }
         self.drivers[driverUUID] = oneDriver
         if self.appClosed:
@@ -82,11 +89,13 @@ class DriverManager(QObject):
                 driver.execute_script("document.title = 'Driver " + str(kwargs['number']) + "'")
             elif func == "elementPickStart":
                 try:
-                    elementPicker.inject(driver)
                     elementPicker.start(driver, kwargs.get("jobuuid"))
                     oneDriver["pickArmed"] = True
+                    oneDriver["pickJobUuid"] = kwargs.get("jobuuid")
+                    oneDriver["pickRecoveries"] = 0
                 except Exception as e:
                     oneDriver["pickArmed"] = False
+                    oneDriver["pickJobUuid"] = None
                     self.status.emit({
                         "type": "elementPickCancelled",
                         "uuid": driverUUID,
@@ -99,6 +108,7 @@ class DriverManager(QObject):
                 except Exception:
                     pass
                 oneDriver["pickArmed"] = False
+                oneDriver["pickJobUuid"] = None
                 self.status.emit({
                     "type": "elementPickCancelled",
                     "uuid": driverUUID,
@@ -112,19 +122,39 @@ class DriverManager(QObject):
                     result = elementPicker.poll(driver)
                 except Exception:
                     result = None
-                if result:
+                if not result:
+                    oneDriver["pickRecoveries"] = 0
+                else:
                     status = result.get("status")
                     if status == "picked":
                         oneDriver["pickArmed"] = False
+                        oneDriver["pickJobUuid"] = None
+                        locatorType = result.get("type")
+                        locatorValue = result.get("value")
+                        locatorContext = result.get("context")
+                        try:
+                            verified, verifyError = elementPicker.verify(
+                                driver, locatorType, locatorValue, locatorContext
+                            )
+                        except Exception as e:
+                            verified, verifyError = False, str(e)
+                        try:
+                            elementPicker.cancel(driver)
+                        except Exception:
+                            pass
                         self.status.emit({
                             "type": "elementPicked",
                             "uuid": driverUUID,
                             "jobuuid": result.get("jobuuid"),
-                            "locatorType": result.get("type"),
-                            "locatorValue": result.get("value"),
+                            "locatorType": locatorType,
+                            "locatorValue": locatorValue,
+                            "locatorContext": locatorContext,
+                            "verified": bool(verified),
+                            "error": "" if verified else (verifyError or "locator did not resolve"),
                         })
                     elif status == "cancelled":
                         oneDriver["pickArmed"] = False
+                        oneDriver["pickJobUuid"] = None
                         try:
                             elementPicker.cancel(driver)
                         except Exception:
@@ -133,7 +163,31 @@ class DriverManager(QObject):
                             "type": "elementPickCancelled",
                             "uuid": driverUUID,
                             "jobuuid": result.get("jobuuid"),
+                            "error": result.get("error", ""),
                         })
+                    elif status == "lost":
+                        # A navigation (or an early poll during one) wiped the
+                        # in-page picker, so put it back instead of going quiet.
+                        recoveries = oneDriver.get("pickRecoveries", 0) + 1
+                        oneDriver["pickRecoveries"] = recoveries
+                        jobuuid = oneDriver.get("pickJobUuid")
+                        reArmError = None
+                        if recoveries <= MAX_PICK_RECOVERIES:
+                            try:
+                                elementPicker.start(driver, jobuuid)
+                            except Exception as e:
+                                reArmError = str(e)
+                        else:
+                            reArmError = result.get("reason") or "picker could not be restored"
+                        if reArmError and recoveries > MAX_PICK_RECOVERIES:
+                            oneDriver["pickArmed"] = False
+                            oneDriver["pickJobUuid"] = None
+                            self.status.emit({
+                                "type": "elementPickCancelled",
+                                "uuid": driverUUID,
+                                "jobuuid": jobuuid,
+                                "error": reArmError,
+                            })
             else:
                 result, jobuuid, direction, artifact = func()
                 screenshot = None

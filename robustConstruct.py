@@ -602,6 +602,9 @@ class RobustConstruct(Ui_RobustMain):
                 event.get('jobuuid'),
                 event.get('locatorType'),
                 event.get('locatorValue'),
+                event.get('locatorContext'),
+                event.get('verified', True),
+                event.get('error', ''),
             )
 
     def handleElementPickCancelled(self, event):
@@ -611,7 +614,7 @@ class RobustConstruct(Ui_RobustMain):
             return
         jobsArea = driver.get('settingsWindowClass')
         if jobsArea is not None:
-            jobsArea.onPickCancelled(event.get('jobuuid'))
+            jobsArea.onPickCancelled(event.get('jobuuid'), event.get('error', ''))
 
     def executeAllDrivers(self):
         for uuid, driver in self.worker.driverManager.drivers.items():
