@@ -10,7 +10,6 @@ import json
 class JobsAreaConstruct:
 
     def __init__(self, robustClass, jobsFor, scrapeuuid, driverNumber):
-        self.scrapeJobClass = robustClass.worker.driverManager.drivers[scrapeuuid]['scrapeJobClass']
         self.robustClass = robustClass
         self.jobsFor = jobsFor
         self.scrapeuuid = scrapeuuid
@@ -18,6 +17,7 @@ class JobsAreaConstruct:
         self.jobRowWidgets = []
         self._stash = QtWidgets.QWidget()
         self._chromeConnected = False
+        self._rowsStale = False
         self.resetLabelTimer = QtCore.QTimer()
         self.resetLabelTimer.setInterval(1500)
         self.resetLabelTimer.timeout.connect(self.resetStatusLabel)
@@ -26,6 +26,17 @@ class JobsAreaConstruct:
         self.pickPollTimer = QtCore.QTimer()
         self.pickPollTimer.setInterval(150)
         self.pickPollTimer.timeout.connect(self.pollPickResult)
+
+    @property
+    def scrapeJobClass(self):
+        # The driver's scrape job object is replaced whenever its scrape job changes,
+        # so it must never be cached on this class.
+        driver = self.robustClass.worker.driverManager.drivers.get(self.scrapeuuid)
+        return driver.get('scrapeJobClass') if driver else None
+
+    @property
+    def scrapeActions(self):
+        return getattr(self.scrapeJobClass, 'actions', [])
 
     def isDriverHeadless(self):
         driver = self.robustClass.worker.driverManager.drivers.get(self.scrapeuuid)
@@ -52,12 +63,16 @@ class JobsAreaConstruct:
             self.robustClass.oneJob = None
             self.oneJob = None
         self.initiateVariables()
-        self.initiateSavedJobs(self.scrapeJobClass.actions)
         self.attachSaveOrderEffect()
+        self.robustClass.activeJobsArea = self
+        self._rowsStale = False
+        self.initiateSavedJobs(self.scrapeActions)
         self.jobsGroupBox.setTitle(f"Driver {self.driverNumber} Jobs")
         self.statusLabel.setText(self.jobsFor)
         self.connectChrome()
-        self.robustClass.activeJobsArea = self
+        # The save-order button is shared, so its enabled state must be claimed, not inherited.
+        self.currentActions = self.scrapeActions
+        self.evaluateJobsOrderChange()
 
     def attachSaveOrderEffect(self):
         # Shared saveOrderButton deletes the previous effect on setGraphicsEffect.
@@ -67,22 +82,72 @@ class JobsAreaConstruct:
 
     def activate(self):
         if getattr(self.robustClass, 'activeJobsArea', None) is self:
+            if self._rowsStale:
+                self.rebuildRows()
             return
         prev = getattr(self.robustClass, 'activeJobsArea', None)
         if prev is not None:
             prev.deactivate()
         self.bindWidgets()
-        for jobWidget in self.jobRowWidgets:
-            jobWidget.setParent(self.jobsContainer)
-            self.jobsContainerLayout.addWidget(jobWidget)
+        self.robustClass.activeJobsArea = self
         self.attachSaveOrderEffect()
         self.jobsGroupBox.setTitle(f"Driver {self.driverNumber} Jobs")
         self.statusLabel.setText(self.jobsFor)
-        self.syncExecutionCheckboxes()
-        self.currentActions = self.scrapeJobClass.actions
-        self.evaluateJobsOrderChange()
         self.connectChrome()
-        self.robustClass.activeJobsArea = self
+        if self._rowsStale:
+            self.rebuildRows()
+            return
+        for jobWidget in self.jobRowWidgets:
+            jobWidget.setParent(self.jobsContainer)
+            self.jobsContainerLayout.addWidget(jobWidget)
+        self.syncExecutionCheckboxes()
+        self.currentActions = self.scrapeActions
+        self.evaluateJobsOrderChange()
+
+    def setScrapeJob(self, jobsFor):
+        self.forceCancelPick()
+        self.jobsFor = jobsFor or ""
+        self.markRowsStale()
+
+    def renameScrapeJob(self, jobsFor):
+        self.jobsFor = jobsFor
+        if self.isActive():
+            self.statusLabel.setText(self.jobsFor)
+
+    def markRowsStale(self):
+        self._rowsStale = True
+        if self.isActive():
+            self.rebuildRows()
+
+    def rebuildRows(self):
+        # Rows are parented into the main window's shared jobsContainer, so they can only
+        # be built while this area owns it; otherwise rebuild lazily on the next activate().
+        if not self.isActive():
+            self._rowsStale = True
+            return
+        self.forceCancelPick()
+        self._rowsStale = False
+        for jobWidget in self.jobRowWidgets:
+            self.jobsContainerLayout.removeWidget(jobWidget)
+            jobWidget.setParent(None)
+            jobWidget.deleteLater()
+        self.jobRowWidgets = []
+        self.nextJobNumber = 1
+        self.newjobflag = True
+        self.nextsavedjobuuid = None
+        self.initialActions = []
+        self.currentActions = []
+        self.currentJobs = []
+        self.draggedJob = None
+        self.draggedAction = None
+        self.dragUUID = None
+        self.dragNextJob = None
+        self.dragPreviousJob = None
+        self.initiateSavedJobs(self.scrapeActions)
+        self.jobsGroupBox.setTitle(f"Driver {self.driverNumber} Jobs")
+        self.statusLabel.setText(self.jobsFor)
+        self.currentActions = self.scrapeActions
+        self.evaluateJobsOrderChange()
 
     def deactivate(self):
         self.forceCancelPick()
@@ -119,7 +184,7 @@ class JobsAreaConstruct:
         self.jobRowWidgets = rows
 
     def syncExecutionCheckboxes(self):
-        for action in self.scrapeJobClass.actions:
+        for action in self.scrapeActions:
             kwargs = action[1]
             jobuuid = kwargs.get("uuid")
             isexecuted = kwargs.get("isexecuted", False)
@@ -435,6 +500,10 @@ class JobsAreaConstruct:
             self.saveOrderButton.clicked.disconnect(self.saveOrderHandle)
         except TypeError:
             pass
+        # The container is shared, so leaving these bound would feed drag events to a stashed area.
+        self.jobsContainer.mousePressEvent = lambda event: None
+        self.jobsContainer.mouseMoveEvent = lambda event: None
+        self.jobsContainer.mouseReleaseEvent = lambda event: None
         self._chromeConnected = False
 
     def saveOrderHandle(self):
@@ -443,7 +512,10 @@ class JobsAreaConstruct:
         with open("./resources/jobs.json", "r") as f:
             jobsFile = json.load(f)
         jobsDict: dict = jobsFile['jobs']
-        jobs = jobsDict[self.jobsFor]
+        jobs = jobsDict.get(self.jobsFor)
+        if not jobs:
+            self.setStatusMessage("No scrape job selected to save order for")
+            return
         for job in jobs:
             for action in self.currentActions:
                 if job[1]['uuid'] == action[1]['uuid']:
@@ -460,6 +532,7 @@ class JobsAreaConstruct:
             self.initialActions.append(action)
         self.setStatusMessage("Current Order Saved")
         self.opaceEffect.setOpacity(0)
+        self.robustClass.refreshSiblingDrivers(self.jobsFor, exceptUuid=self.scrapeuuid)
 
     def deleteJobHandle(self):
         button = self.jobsGroupBox.sender()
@@ -475,7 +548,11 @@ class JobsAreaConstruct:
             self.jobRowWidgets.remove(jobWidget)
         jobWidget.deleteLater()
         jobuuid = jobWidget.property("uuid")
-        self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].deleteJob(uuid=jobuuid, owner=self.jobsFor)
+        scrapeJobClass = self.scrapeJobClass
+        if scrapeJobClass is None:
+            return
+        scrapeJobClass.deleteJob(uuid=jobuuid, owner=self.jobsFor)
+        self.robustClass.refreshSiblingDrivers(self.jobsFor, exceptUuid=self.scrapeuuid)
 
     def ensureArtifactButton(self, oneJob, oneJobLayout, jobUUID):
         existing = oneJob.findChild(QtWidgets.QPushButton, "artifactButton" + str(jobUUID))
@@ -502,7 +579,7 @@ class JobsAreaConstruct:
         jobuuid = jobWidget.property("uuid")
         content = ""
         if jobuuid:
-            for action in self.scrapeJobClass.actions:
+            for action in self.scrapeActions:
                 if action[1].get("uuid") == jobuuid:
                     artifact = action[1].get("artifact")
                     if isinstance(artifact, list):
@@ -541,7 +618,7 @@ class JobsAreaConstruct:
             return
         click_y = event.pos().y()
         self.currentJobs = [self.jobsContainerLayout.itemAt(i).widget() for i in range(self.jobsContainerLayout.count())]
-        self.currentActions = self.scrapeJobClass.actions
+        self.currentActions = self.scrapeActions
         for job in self.currentJobs:
             job_y = job.pos().y()
             job_height = job.size().height()
@@ -722,6 +799,7 @@ class JobsAreaConstruct:
                     doneCheckBox.setObjectName("doneCheckBox" + str(newJobUUID))
                     saveMsg = self.robustClass.worker.driverManager.drivers[self.scrapeuuid]['scrapeJobClass'].addExtractLinksJob(link_identifier=identifierType, identifier_value=identifierValue, owner=self.jobsFor, uuid=newJobUUID)
                     self.setStatusMessage(saveMsg)
+            self.robustClass.refreshSiblingDrivers(self.jobsFor, exceptUuid=self.scrapeuuid)
 
         saveJobButton.clicked.connect(saveJobHandle)
         oneJobLayout.addWidget(saveJobButton)

@@ -130,6 +130,8 @@ class RobustConstruct(Ui_RobustMain):
         self.nextReadyDriverNumber = 1
         self.nextDriverCount = 1
         self.addNewJobDialog = None
+        self.selectedDriverUuid = None
+        self._syncingSelection = False
 
     def connectActions(self):
         self.slider.valueChanged.connect(self.castSliderChange)
@@ -145,8 +147,7 @@ class RobustConstruct(Ui_RobustMain):
         self.driversTabWidget.currentChanged.connect(self.handleDriverTabChange)
 
     def handleDriverTabChange(self, index):
-        print("Driver Tab Changed to index:", index)
-        if index < 0:
+        if self._syncingSelection or index < 0:
             return
         currentWidget = self.driversTabWidget.currentWidget()
         driverObjectName = currentWidget.objectName() if currentWidget else None
@@ -154,27 +155,116 @@ class RobustConstruct(Ui_RobustMain):
             return
         scrapeUuidStr = driverObjectName.replace("driverTab", "", 1)
         # objectName stores str(uuid); drivers dict is keyed by uuid.UUID
-        driver = next(
-            (driver for uuid, driver in self.worker.driverManager.drivers.items() if str(uuid) == scrapeUuidStr),
-            None,
-        )
-        if not driver:
+        uuid = next((uuid for uuid in self.worker.driverManager.drivers if str(uuid) == scrapeUuidStr), None)
+        if uuid is None:
             return
-        driverControlButton = self.scrollAreaWidgetContents.findChild(QtWidgets.QPushButton, "driverControl" + scrapeUuidStr)
-        if not driverControlButton:
-            return
-        driverControlButton.click()
-        existing = driver.get('settingsWindowClass')
-        if existing is not None:
-            existing.activate()
+        self.selectDriver(uuid, syncTab=False)
+
+    def selectDriver(self, uuid, syncTab=True):
+        """Single entry point for making a driver the one the jobs area and tab show."""
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver or driver.get('dropped'):
+            return None
+        jobsArea = driver.get('settingsWindowClass')
+        if jobsArea is None:
+            jobsArea = JobsAreaConstruct(self, self.getDriverScrapeJobName(uuid), uuid, driver['number'])
+            jobsArea.setupUi()
+            driver['settingsWindowClass'] = jobsArea
         else:
-            prev = getattr(self, 'activeJobsArea', None)
-            if prev is not None:
-                prev.deactivate()
-                self.jobsGroupBox.setTitle("Jobs")
-                self.statusLabel.setText("")
-                self.saveOrderButton.setEnabled(False)
-            
+            jobsArea.activate()
+        self.selectedDriverUuid = uuid
+        if syncTab:
+            self.syncDriverTab(uuid)
+        return jobsArea
+
+    def syncDriverTab(self, uuid):
+        tabContainer = self.driversTabWidget.findChild(QtWidgets.QWidget, "driverTab" + str(uuid))
+        if tabContainer is None:
+            return
+        index = self.driversTabWidget.indexOf(tabContainer)
+        if index < 0 or index == self.driversTabWidget.currentIndex():
+            return
+        # Guarded so the resulting currentChanged doesn't bounce back into selectDriver.
+        self._syncingSelection = True
+        try:
+            self.driversTabWidget.setCurrentIndex(index)
+        finally:
+            self._syncingSelection = False
+
+    def getDriverScrapeJobName(self, uuid):
+        comboBox = self.scrollAreaWidgetContents.findChild(QtWidgets.QComboBox, "driverDefaultUrl" + str(uuid))
+        return comboBox.currentText() if comboBox is not None else ""
+
+    def applyScrapeJobToDriver(self, uuid, jobsFor, preserveProgress=False):
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver or driver.get('dropped'):
+            return None
+        previous = driver.get('scrapeJobClass')
+        actions = self.getActionsForScrapeJob(jobsFor)
+        if preserveProgress and previous is not None:
+            previousKwargs = {kwargs.get('uuid'): kwargs for _, kwargs in getattr(previous, 'actions', [])}
+            for _, kwargs in actions:
+                carried = previousKwargs.get(kwargs.get('uuid'))
+                if carried is None:
+                    continue
+                kwargs['isexecuted'] = carried.get('isexecuted', False)
+                if 'artifact' in carried:
+                    kwargs['artifact'] = carried['artifact']
+        scrapeJobClass = abstractScrapeJob(driver['driver'])
+        scrapeJobClass.initiateActions(actions)
+        if preserveProgress and previous is not None:
+            scrapeJobClass.executePosition = min(getattr(previous, 'executePosition', 0), len(actions))
+            scrapeJobClass.firstExecuted = getattr(previous, 'firstExecuted', False)
+            scrapeJobClass.lastExecuted = getattr(previous, 'lastExecuted', False) and scrapeJobClass.executePosition >= len(actions)
+        driver['scrapeJobClass'] = scrapeJobClass
+        driver['scrapeJobName'] = jobsFor
+        return scrapeJobClass
+
+    def handleDriverScrapeJobSelected(self, uuid, jobsFor):
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver or driver.get('dropped'):
+            return
+        self.applyScrapeJobToDriver(uuid, jobsFor)
+        jobsArea = driver.get('settingsWindowClass')
+        if jobsArea is not None:
+            jobsArea.setScrapeJob(jobsFor)
+        self.selectDriver(uuid)
+
+    def refreshSiblingDrivers(self, jobsFor, exceptUuid=None):
+        """Drivers sharing a scrape job hold separate action lists, so re-read them from file."""
+        # Snapshot: driver threads can insert into the drivers dict at any time.
+        for uuid, driver in list(self.worker.driverManager.drivers.items()):
+            if driver.get('dropped') or uuid == exceptUuid:
+                continue
+            if driver.get('scrapeJobName') != jobsFor:
+                continue
+            self.applyScrapeJobToDriver(uuid, jobsFor, preserveProgress=True)
+            jobsArea = driver.get('settingsWindowClass')
+            if jobsArea is not None:
+                jobsArea.markRowsStale()
+
+    def handleScrapeJobRenamed(self, oldName, newName):
+        self.existJobs = [newName if job == oldName else job for job in self.existJobs]
+        if getattr(self, 'latestJob', None) == oldName:
+            self.latestJob = newName
+        for driver in list(self.worker.driverManager.drivers.values()):
+            if driver.get('scrapeJobName') == oldName:
+                driver['scrapeJobName'] = newName
+            jobsArea = driver.get('settingsWindowClass')
+            if jobsArea is not None and jobsArea.jobsFor == oldName:
+                jobsArea.renameScrapeJob(newName)
+
+    def handleScrapeJobRemoved(self, removedName):
+        if removedName in self.existJobs:
+            self.existJobs.remove(removedName)
+        for uuid, driver in list(self.worker.driverManager.drivers.items()):
+            if driver.get('dropped') or driver.get('scrapeJobName') != removedName:
+                continue
+            replacement = self.getDriverScrapeJobName(uuid)
+            self.applyScrapeJobToDriver(uuid, replacement)
+            jobsArea = driver.get('settingsWindowClass')
+            if jobsArea is not None:
+                jobsArea.setScrapeJob(replacement)
 
     def applyDarkTheme(self, persist=True):
         QApplication.setPalette(DarkPalette)
@@ -259,21 +349,22 @@ class RobustConstruct(Ui_RobustMain):
         jobsDict: dict =jobsFile['jobs']
         actions = []
         if defaultScrapeJob in jobsDict.keys():
-            jobs:list = jobsDict[defaultScrapeJob]
+            # Saved positions are not guaranteed to be a clean 0..n-1 run, so sort rather
+            # than insert by index.
+            jobs:list = sorted(jobsDict[defaultScrapeJob], key=lambda job: job[1].get('position', 0))
             for job in jobs:
                 jobType, kwargs = job
                 kwargs["isexecuted"] = False
-                jobPosition = kwargs['position']
                 if jobType == "GetUrl":
-                    actions.insert(jobPosition, (getUrlJob,kwargs))
+                    actions.append((getUrlJob,kwargs))
                 elif jobType == "InputField":
-                    actions.insert(jobPosition, (inputFieldJob,kwargs))
+                    actions.append((inputFieldJob,kwargs))
                 elif jobType == "ClickButton":
-                    actions.insert(jobPosition, (clickButtonJob,kwargs))
+                    actions.append((clickButtonJob,kwargs))
                 elif jobType == "ExtractText":
-                    actions.insert(jobPosition, (extractTextJob,kwargs))
+                    actions.append((extractTextJob,kwargs))
                 elif jobType == "ExtractLinks":
-                    actions.insert(jobPosition, (extractLinksJob,kwargs))
+                    actions.append((extractLinksJob,kwargs))
         return actions
 
     def handleQThreadStatus(self, event):
@@ -305,11 +396,7 @@ class RobustConstruct(Ui_RobustMain):
         if event['type'] == "driverReady":
             self.worker.driverManager.drivers[event['uuid']]['number'] = self.nextReadyDriverNumber
             self.worker.driverManager.drivers[event['uuid']]['threadQueue'].put(("assignNumber", {"number": self.nextReadyDriverNumber}))
-            driver = self.worker.driverManager.drivers[event['uuid']]['driver']
-            scrapeJobClass = abstractScrapeJob(driver)
-            actions = self.getActionsForScrapeJob(self.mainDefaultBox.currentText())
-            scrapeJobClass.initiateActions(actions)
-            self.worker.driverManager.drivers[event['uuid']]['scrapeJobClass'] = scrapeJobClass
+            self.applyScrapeJobToDriver(event['uuid'], self.mainDefaultBox.currentText())
             onDriverReadyInfo = {"number":self.nextReadyDriverNumber,"uuid":event['uuid']}
             self.postToUI("status", {"msg": "Driver Ready " + str(self.nextReadyDriverNumber)})
             self.postToUI("createInstance", onDriverReadyInfo)
@@ -321,10 +408,15 @@ class RobustConstruct(Ui_RobustMain):
             direction = event['direction']
             result = event['result']
             artifact = event.get("artifact")
-            executeClass = self.worker.driverManager.drivers[event['uuid']]['scrapeJobClass']
-            actions = executeClass.actions
+            driver = self.worker.driverManager.drivers.get(event['uuid'])
+            if not driver:
+                return
+            executeClass = driver.get('scrapeJobClass')
+            actions = getattr(executeClass, 'actions', [])
+            matchedAction = False
             for action in actions:
                 if action[1].get("uuid") == jobuuid:
+                    matchedAction = True
                     jobtype = action[1].get("jobtype")
                     is_extract = jobtype in ("ExtractText", "ExtractLinks")
                     if direction == "forward":
@@ -341,8 +433,10 @@ class RobustConstruct(Ui_RobustMain):
                             else:
                                 result = "No content to remove"
                     break
-            if "settingsWindowClass" in self.worker.driverManager.drivers[event['uuid']].keys():
-                jobSettingsClass = self.worker.driverManager.drivers[event['uuid']]['settingsWindowClass']
+            jobSettingsClass = driver.get('settingsWindowClass')
+            # Results whose job is gone from the action list are stale, e.g. they were
+            # queued before the driver's scrape job changed.
+            if jobSettingsClass is not None and (matchedAction or result in ("End of actions", "Previous Done")):
                 jobSettingsClass.updateJobExecutionStatus(jobuuid, direction, result)
             screenshot = event.get("screenshot")
             if screenshot:
@@ -577,35 +671,37 @@ class RobustConstruct(Ui_RobustMain):
         driverName.setObjectName("driverName"+str(uuid))
         driverName.setText("Driver " + str(number))
         driverName.setCursor(QtGui.QCursor(Qt.PointingHandCursor))
-        driverName.mousePressEvent = lambda event: self.postToUI("focusDriver", {"HWND": self.worker.driverManager.drivers[uuid]['HWND']})
+
+        def driverNamePressed(event):
+            self.selectDriver(uuid)
+            driver = self.worker.driverManager.drivers.get(uuid)
+            # Foregrounding an embedded child window does nothing; only useful once popped out.
+            if driver and not driver.get('embedded') and driver.get('HWND'):
+                self.postToUI("focusDriver", {"HWND": driver['HWND']})
+
+        driverName.mousePressEvent = driverNamePressed
         instanceLayout.addWidget(driverName)
         driverDefaultUrl = QtWidgets.QComboBox(driverInstance)
         driverDefaultUrl.setMaximumSize(QtCore.QSize(150, 30))
         driverDefaultUrl.setObjectName("driverDefaultUrl"+str(uuid))
         for job in self.existJobs:
             driverDefaultUrl.addItem(job)
-        def handleDriverScrapeJobChange(event):
-            scrapeJobClass = abstractScrapeJob(self.worker.driverManager.drivers[uuid]['driver'])
-            actions = self.getActionsForScrapeJob(driverDefaultUrl.currentText())
-            scrapeJobClass.initiateActions(actions)
-            self.worker.driverManager.drivers[uuid]['scrapeJobClass'] = scrapeJobClass
+        def handleDriverScrapeJobChange(text):
+            self.handleDriverScrapeJobSelected(uuid, driverDefaultUrl.currentText())
         def controlButtonHandle():
-            driver = self.worker.driverManager.drivers[uuid]
-            existing = driver.get('settingsWindowClass')
-            if existing is None:
-                jobsAreaClass = JobsAreaConstruct(self, driverDefaultUrl.currentText(), uuid, driver['number'])
-                jobsAreaClass.setupUi()
-                driver['settingsWindowClass'] = jobsAreaClass
-            else:
-                existing.activate()
+            self.selectDriver(uuid)
         def nextButtonHandle():
-            executeClass = self.worker.driverManager.drivers[uuid]['scrapeJobClass']
-            func = executeClass.executeNextAction
-            self.worker.driverManager.drivers[uuid]['threadQueue'].put((func,{}))
+            self.selectDriver(uuid)
+            executeClass = self.worker.driverManager.drivers[uuid].get('scrapeJobClass')
+            if executeClass is None:
+                return
+            self.worker.driverManager.drivers[uuid]['threadQueue'].put((executeClass.executeNextAction,{}))
         def previousButtonHandle():
-            executeClass = self.worker.driverManager.drivers[uuid]['scrapeJobClass']
-            func = executeClass.executePreviousAction
-            self.worker.driverManager.drivers[uuid]['threadQueue'].put((func,{}))
+            self.selectDriver(uuid)
+            executeClass = self.worker.driverManager.drivers[uuid].get('scrapeJobClass')
+            if executeClass is None:
+                return
+            self.worker.driverManager.drivers[uuid]['threadQueue'].put((executeClass.executePreviousAction,{}))
         def eyeButtonHandle():
             driver = self.worker.driverManager.drivers[uuid]
             if driver.get('headless'):
@@ -615,7 +711,13 @@ class RobustConstruct(Ui_RobustMain):
             else:
                 self.postToUI("reEmbedDriver", {"uuid": uuid})
         driverDefaultUrl.currentTextChanged.connect(handleDriverScrapeJobChange)
+        # Seeding the default must not count as a user selection, or creating a driver
+        # would steal the jobs area and the visible tab.
+        driverDefaultUrl.blockSignals(True)
         driverDefaultUrl.setCurrentText(self.mainDefaultBox.currentText())
+        driverDefaultUrl.blockSignals(False)
+        if driverDefaultUrl.currentText() != self.worker.driverManager.drivers[uuid].get('scrapeJobName'):
+            self.applyScrapeJobToDriver(uuid, driverDefaultUrl.currentText())
         instanceLayout.addWidget(driverDefaultUrl)
         spacerItem4 = QtWidgets.QSpacerItem(10, 20, QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Minimum)
         instanceLayout.addItem(spacerItem4)

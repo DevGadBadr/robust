@@ -73,7 +73,11 @@ class NewJobConstruct(Ui_NewJobDialog):
         for comboBox in driverInstancesComboBoxes:
             itemIndex = comboBox.findText(self.selectedJobName)
             if itemIndex >= 0:
+                # A rename is not a job change, so it must not rebuild the driver's actions.
+                comboBox.blockSignals(True)
                 comboBox.setItemText(itemIndex, newItemText)
+                comboBox.blockSignals(False)
+        self.robustClass.handleScrapeJobRenamed(self.selectedJobName, newItemText)
         self.selectedJobName = newItemText
         self.setStatus(f"Job renamed to {newItemText} successfully.")
         
@@ -96,8 +100,11 @@ class NewJobConstruct(Ui_NewJobDialog):
         for comboBox in driverInstancesComboBoxes:
             for i in range(comboBox.count()):
                 if comboBox.itemText(i) == self.selectedJobName:
+                    comboBox.blockSignals(True)
                     comboBox.removeItem(i)
+                    comboBox.blockSignals(False)
                     break
+        self.robustClass.handleScrapeJobRemoved(self.selectedJobName)
         self.existJobsList.takeItem(self.existJobsList.row(self.existJobsList.findItems(self.selectedJobName, Qt.MatchExactly)[0]))
         self.setStatus(f"Job {self.selectedJobName} removed successfully.")
         self.removeButton.setEnabled(False)
