@@ -133,6 +133,7 @@ class RobustConstruct(Ui_RobustMain):
         self.addNewJobDialog = None
         self.selectedDriverUuid = None
         self._syncingSelection = False
+        self.statusLogEntries = []
 
     def connectActions(self):
         self.slider.valueChanged.connect(self.castSliderChange)
@@ -146,6 +147,11 @@ class RobustConstruct(Ui_RobustMain):
         self.actionDark.triggered.connect(lambda: self.applyDarkTheme())
         self.actionLight.triggered.connect(lambda: self.applyLightTheme())
         self.driversTabWidget.currentChanged.connect(self.handleDriverTabChange)
+        try:
+            self.clearStatusButtton.clicked.disconnect()
+        except TypeError:
+            pass
+        self.clearStatusButtton.clicked.connect(self.clearStatusArea)
 
     def handleDriverTabChange(self, index):
         if self._syncingSelection or index < 0:
@@ -277,6 +283,7 @@ class RobustConstruct(Ui_RobustMain):
         if not driver or driver.get('dropped'):
             return
         self.applyScrapeJobToDriver(uuid, jobsFor)
+        self.clearDriverExecuteDone(uuid)
         jobsArea = driver.get('settingsWindowClass')
         if jobsArea is not None:
             jobsArea.setScrapeJob(jobsFor)
@@ -424,14 +431,20 @@ class RobustConstruct(Ui_RobustMain):
 
     def handleQThreadStatus(self, event):
         if event['type'] == "driverCreating":
-            self.postToUI("status", {"msg": "Creating Driver " + str(self.nextDriverNumber)})
+            self.postToUI("status", {
+                "msg": "Creating Driver " + str(self.nextDriverNumber),
+                "uuid": event['uuid'],
+            })
             self.nextDriverNumber += 1
 
         if event['type'] == "driverDied":
             uuid = event['uuid']
             self.stopDriverAutoExecute(uuid)
             driverNumber = self.worker.driverManager.drivers[uuid]['number']
-            self.postToUI("status", {"msg": "Driver " + str(driverNumber) + " Died"})
+            self.postToUI("status", {
+                "msg": "Driver " + str(driverNumber) + " Died",
+                "uuid": uuid,
+            })
             driver = self.worker.driverManager.drivers[uuid]
             jobsArea = driver.get('settingsWindowClass')
             if jobsArea is not None:
@@ -454,7 +467,10 @@ class RobustConstruct(Ui_RobustMain):
             self.worker.driverManager.drivers[event['uuid']]['threadQueue'].put(("assignNumber", {"number": self.nextReadyDriverNumber}))
             self.applyScrapeJobToDriver(event['uuid'], self.mainDefaultBox.currentText())
             onDriverReadyInfo = {"number":self.nextReadyDriverNumber,"uuid":event['uuid']}
-            self.postToUI("status", {"msg": "Driver Ready " + str(self.nextReadyDriverNumber)})
+            self.postToUI("status", {
+                "msg": "Driver Ready " + str(self.nextReadyDriverNumber),
+                "uuid": event['uuid'],
+            })
             self.postToUI("createInstance", onDriverReadyInfo)
             self.nextReadyDriverNumber += 1
             self.updateCounter()
@@ -499,10 +515,26 @@ class RobustConstruct(Ui_RobustMain):
             if screenshot:
                 self.postToUI("updateScreenshot", {"uuid": event['uuid'], "screenshot": screenshot})
             self.handleDriverAutoExecuteResult(event['uuid'], result, direction)
+            if (
+                direction == "forward"
+                and not driver.get('autoExecuting')
+                and (
+                    result == "End of actions"
+                    or (
+                        executeClass is not None
+                        and getattr(executeClass, 'lastExecuted', False)
+                        and "Error" not in str(result)
+                    )
+                )
+            ):
+                self.setDriverExecuteLoading(event['uuid'], False, done=True)
 
 
         if event['type'] == "driverCreationFailed":
-            self.postToUI("status", {"msg": "Driver Creation Failed: " + event.get("error", "Unknown Error")})
+            self.postToUI("status", {
+                "msg": "Driver Creation Failed: " + event.get("error", "Unknown Error"),
+                "uuid": event.get("uuid"),
+            })
             self.worker.driverManager.drivers[event['uuid']]['dropped'] = True
             self.updateCounter()
 
@@ -538,7 +570,7 @@ class RobustConstruct(Ui_RobustMain):
         if driverInstance:
             driverInstance.deleteLater()
         self.removeDriverTab(uuid)
-        self.postToUI("status", {"msg": "Driver " + str(driverNumber) + " Closed"})
+        self.removeDriverStatusLogs(uuid)
         driver['dropped'] = True
         self.updateCounter()
 
@@ -591,7 +623,7 @@ class RobustConstruct(Ui_RobustMain):
                 if 'settingsWindow' in self.worker.driverManager.drivers[uuid].keys():
                     self.worker.driverManager.drivers[uuid]['settingsWindow'].close()
         print("All Drivers Closed")
-        self.postToUI("cleanStatus", self.statusArea.clear)
+        self.postToUI("cleanStatus", None)
         print("UI Status Cleaned")
         self.startButton.setDisabled(False)
 
@@ -607,6 +639,18 @@ class RobustConstruct(Ui_RobustMain):
         currentActiveDrivers = len(self.worker.driverManager.drivers) - sum(1 for driver in self.worker.driverManager.drivers.values() if driver['dropped'])
         self.countNumber.setText(str(currentActiveDrivers))
 
+    def clearStatusArea(self):
+        self.statusLogEntries = []
+        self.statusArea.clear()
+
+    def removeDriverStatusLogs(self, uuid):
+        self.statusLogEntries = [
+            entry for entry in self.statusLogEntries if entry.get("uuid") != uuid
+        ]
+        self.statusArea.clear()
+        for entry in self.statusLogEntries:
+            self.statusArea.append(entry["msg"])
+
     def postToUI(self, taskType, data):
         self.uiUpdateQueue.append((taskType, data))
         if not self.uiUpdateTimer.isActive():
@@ -616,6 +660,10 @@ class RobustConstruct(Ui_RobustMain):
         if self.uiUpdateQueue:
             updateType, event = self.uiUpdateQueue.popleft()
             if updateType == "status":
+                self.statusLogEntries.append({
+                    "msg": event["msg"],
+                    "uuid": event.get("uuid"),
+                })
                 self.statusArea.append(event['msg'])
             elif updateType == "createInstance":
                 self.createDriverInstances(event)
@@ -639,7 +687,7 @@ class RobustConstruct(Ui_RobustMain):
             elif updateType == "elementPickCancelled":
                 self.handleElementPickCancelled(event)
             elif updateType == "cleanStatus":
-                event()
+                self.clearStatusArea()
         else:
             self.uiUpdateTimer.stop()
 
@@ -683,9 +731,25 @@ class RobustConstruct(Ui_RobustMain):
             jobsArea.onPickCancelled(event.get('jobuuid'), event.get('error', ''))
 
     def executeAllDrivers(self):
-        for uuid, driver in self.worker.driverManager.drivers.items():
-            if not driver['dropped']:
-                pass
+        drivers = [
+            (uuid, driver)
+            for uuid, driver in self.worker.driverManager.drivers.items()
+            if not driver.get('dropped')
+        ]
+        if any(driver.get('autoExecuting') for _, driver in drivers):
+            for uuid, driver in drivers:
+                if driver.get('autoExecuting'):
+                    self.stopDriverAutoExecute(uuid)
+        else:
+            for uuid, _ in drivers:
+                self.startDriverAutoExecute(uuid)
+
+    def updateExecuteAllButton(self):
+        anyRunning = any(
+            not driver.get('dropped') and driver.get('autoExecuting')
+            for driver in self.worker.driverManager.drivers.values()
+        )
+        self.executeAllButton.setText("Stop All" if anyRunning else "Execute All")
 
     def getDriverDelaySeconds(self, uuid):
         slider = self.scrollAreaWidgetContents.findChild(QtWidgets.QSlider, "delayTimeSlider" + str(uuid))
@@ -728,6 +792,14 @@ class RobustConstruct(Ui_RobustMain):
             label.setStyleSheet("color: #90EE90; font-weight: bold; font-size: 9pt;")
             slot.layout().addWidget(label, 0, Qt.AlignCenter)
 
+    def clearDriverExecuteDone(self, uuid):
+        slot = self.scrollAreaWidgetContents.findChild(QtWidgets.QWidget, "driverLoadingSlot" + str(uuid))
+        if slot is None:
+            return
+        existing = slot.findChild(QtWidgets.QLabel, "driverDoneLabel" + str(uuid))
+        if existing is not None:
+            existing.deleteLater()
+
     def ensureAutoExecuteTimer(self, uuid):
         driver = self.worker.driverManager.drivers.get(uuid)
         if not driver:
@@ -752,6 +824,7 @@ class RobustConstruct(Ui_RobustMain):
         driver['autoExecuteAwaiting'] = False
         self.setExecuteButtonRunning(uuid, True)
         self.setDriverExecuteLoading(uuid, True)
+        self.updateExecuteAllButton()
         self.queueAutoExecuteStep(uuid)
 
     def stopDriverAutoExecute(self, uuid, completed=False):
@@ -765,6 +838,7 @@ class RobustConstruct(Ui_RobustMain):
             timer.stop()
         self.setExecuteButtonRunning(uuid, False)
         self.setDriverExecuteLoading(uuid, False, done=completed)
+        self.updateExecuteAllButton()
 
     def queueAutoExecuteStep(self, uuid):
         driver = self.worker.driverManager.drivers.get(uuid)
@@ -962,6 +1036,7 @@ class RobustConstruct(Ui_RobustMain):
             self.worker.driverManager.drivers[uuid]['threadQueue'].put((executeClass.executeNextAction,{}))
         def previousButtonHandle():
             self.selectDriver(uuid)
+            self.clearDriverExecuteDone(uuid)
             executeClass = self.worker.driverManager.drivers[uuid].get('scrapeJobClass')
             if executeClass is None:
                 return

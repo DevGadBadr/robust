@@ -500,6 +500,10 @@ class JobsAreaConstruct:
             jobName = jobWidget.findChild(QtWidgets.QLabel)
             if jobName:
                 self.setStatusMessage(f"{jobName.text()} executed with result: {result}")
+                self.robustClass.postToUI("status", {
+                    "msg": f"Driver {self.driverNumber} - {jobName.text()} Executed With Result: {result}",
+                    "uuid": self.scrapeuuid,
+                })
 
     def initiateJobTypeOptions(self, comboBox):
         for jobType in JOB_TYPES.values():
