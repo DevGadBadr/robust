@@ -700,6 +700,34 @@ class RobustConstruct(Ui_RobustMain):
             return
         executeButton.setText("Stop" if running else "Execute")
 
+    def setDriverExecuteLoading(self, uuid, loading, done=False):
+        slot = self.scrollAreaWidgetContents.findChild(QtWidgets.QWidget, "driverLoadingSlot" + str(uuid))
+        if slot is None:
+            return
+        for objectName in ("driverLoadingLabel" + str(uuid), "driverDoneLabel" + str(uuid)):
+            existing = slot.findChild(QtWidgets.QLabel, objectName)
+            if existing is None:
+                continue
+            if objectName.startswith("driverLoadingLabel"):
+                self.removeSpinnerLabel(existing)
+            existing.deleteLater()
+        if loading:
+            label = QtWidgets.QLabel(slot)
+            label.setObjectName("driverLoadingLabel" + str(uuid))
+            label.setText("")
+            label.setScaledContents(True)
+            label.setFixedSize(30, 30)
+            label.setPixmap(QtGui.QPixmap("./resources/spinner.png"))
+            slot.layout().addWidget(label, 0, Qt.AlignCenter)
+            self.addSpinnerLabel(label)
+        elif done:
+            label = QtWidgets.QLabel(slot)
+            label.setObjectName("driverDoneLabel" + str(uuid))
+            label.setText("Done")
+            label.setAlignment(Qt.AlignCenter)
+            label.setStyleSheet("color: #90EE90; font-weight: bold; font-size: 9pt;")
+            slot.layout().addWidget(label, 0, Qt.AlignCenter)
+
     def ensureAutoExecuteTimer(self, uuid):
         driver = self.worker.driverManager.drivers.get(uuid)
         if not driver:
@@ -723,9 +751,10 @@ class RobustConstruct(Ui_RobustMain):
         driver['autoExecuting'] = True
         driver['autoExecuteAwaiting'] = False
         self.setExecuteButtonRunning(uuid, True)
+        self.setDriverExecuteLoading(uuid, True)
         self.queueAutoExecuteStep(uuid)
 
-    def stopDriverAutoExecute(self, uuid):
+    def stopDriverAutoExecute(self, uuid, completed=False):
         driver = self.worker.driverManager.drivers.get(uuid)
         if not driver:
             return
@@ -735,6 +764,7 @@ class RobustConstruct(Ui_RobustMain):
         if timer is not None:
             timer.stop()
         self.setExecuteButtonRunning(uuid, False)
+        self.setDriverExecuteLoading(uuid, False, done=completed)
 
     def queueAutoExecuteStep(self, uuid):
         driver = self.worker.driverManager.drivers.get(uuid)
@@ -742,7 +772,7 @@ class RobustConstruct(Ui_RobustMain):
             return
         executeClass = driver.get('scrapeJobClass')
         if executeClass is None or getattr(executeClass, 'lastExecuted', False):
-            self.stopDriverAutoExecute(uuid)
+            self.stopDriverAutoExecute(uuid, completed=True)
             return
         driver['autoExecuteAwaiting'] = True
         driver['threadQueue'].put((executeClass.executeNextAction, {}))
@@ -769,7 +799,7 @@ class RobustConstruct(Ui_RobustMain):
             return
         executeClass = driver.get('scrapeJobClass')
         if result == "End of actions" or (executeClass is not None and getattr(executeClass, 'lastExecuted', False)):
-            self.stopDriverAutoExecute(uuid)
+            self.stopDriverAutoExecute(uuid, completed=True)
             return
         self.scheduleNextAutoExecute(uuid)
 
@@ -837,18 +867,12 @@ class RobustConstruct(Ui_RobustMain):
         driverName.mousePressEvent = driverNamePressed
         instanceLayout.addWidget(driverName)
         executeDelayWidget = QtWidgets.QWidget(driverInstance)
-        executeDelayWidget.setMinimumSize(QtCore.QSize(200, 0))
+        executeDelayWidget.setMinimumSize(QtCore.QSize(0, 0))
         executeDelayWidget.setObjectName("executeDelayWidget"+str(uuid))
         executeDelayLayout = QtWidgets.QHBoxLayout(executeDelayWidget)
         executeDelayLayout.setContentsMargins(0, 0, 0, 0)
         executeDelayLayout.setSpacing(10)
         executeDelayLayout.setObjectName("executeDelayLayout"+str(uuid))
-        executeButton = QtWidgets.QPushButton(executeDelayWidget)
-        executeButton.setMinimumSize(QtCore.QSize(0, 30))
-        executeButton.setMaximumSize(QtCore.QSize(100, 30))
-        executeButton.setObjectName("executeButton"+str(uuid))
-        executeButton.setText("Execute")
-        executeDelayLayout.addWidget(executeButton)
         delayTimeSlider = QtWidgets.QSlider(executeDelayWidget)
         delayTimeSlider.setMinimum(1)
         delayTimeSlider.setMaximum(20)
@@ -880,8 +904,27 @@ class RobustConstruct(Ui_RobustMain):
         def delayTimeSliderHandle(value):
             delayTime.setText(self.formatJobDelay(self.sliderTickToDelay(value)))
         delayTimeSlider.valueChanged.connect(delayTimeSliderHandle)
-        spacerBeforeExecute = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        spacerBeforeExecute = QtWidgets.QSpacerItem(20, 20, QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Minimum)
         instanceLayout.addItem(spacerBeforeExecute)
+        executeCluster = QtWidgets.QWidget(driverInstance)
+        executeCluster.setObjectName("executeCluster"+str(uuid))
+        executeClusterLayout = QtWidgets.QHBoxLayout(executeCluster)
+        executeClusterLayout.setContentsMargins(0, 0, 0, 0)
+        executeClusterLayout.setSpacing(20)
+        driverLoadingSlot = QtWidgets.QWidget(executeCluster)
+        driverLoadingSlot.setFixedSize(QtCore.QSize(50, 30))
+        driverLoadingSlot.setObjectName("driverLoadingSlot"+str(uuid))
+        driverLoadingSlotLayout = QtWidgets.QHBoxLayout(driverLoadingSlot)
+        driverLoadingSlotLayout.setContentsMargins(0, 0, 0, 0)
+        driverLoadingSlotLayout.setSpacing(0)
+        executeClusterLayout.addWidget(driverLoadingSlot)
+        executeButton = QtWidgets.QPushButton(executeCluster)
+        executeButton.setMinimumSize(QtCore.QSize(0, 30))
+        executeButton.setMaximumSize(QtCore.QSize(100, 30))
+        executeButton.setObjectName("executeButton"+str(uuid))
+        executeButton.setText("Execute")
+        executeClusterLayout.addWidget(executeButton)
+        instanceLayout.addWidget(executeCluster)
         instanceLayout.addWidget(executeDelayWidget)
         spacerAfterExecute = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         instanceLayout.addItem(spacerAfterExecute)
@@ -897,6 +940,10 @@ class RobustConstruct(Ui_RobustMain):
             delayTimeSlider.setVisible(visible)
             delayTime.setVisible(visible)
             saveDelayButton.setVisible(visible)
+            if visible:
+                executeDelayWidget.setMinimumSize(QtCore.QSize(250, 0))
+            else:
+                executeDelayWidget.setMinimumSize(QtCore.QSize(0, 0))
         def saveDelayHandle():
             jobName = driverDefaultUrl.currentText()
             if not jobName:

@@ -84,6 +84,8 @@ def setupSpinner(robustMainWindow):
     robustMainWindow.spinnerAnimation.setEndValue(360.0)
     robustMainWindow.spinnerAnimation.setDuration(1000)  # 1 sec per rotation
     robustMainWindow.spinnerAnimation.setLoopCount(-1)   # infinite
+    robustMainWindow.spinnerExtraLabels = set()
+    robustMainWindow.spinnerMainActive = False
 
     def rotate(angle):
         canvas = QPixmap(canvasSize, canvasSize)
@@ -98,19 +100,50 @@ def setupSpinner(robustMainWindow):
         painter.drawPixmap(0, 0, robustMainWindow.spinnerPixmap)
         painter.end()
 
-        robustMainWindow.loadingLabel.setPixmap(canvas)
+        if robustMainWindow.spinnerMainActive:
+            robustMainWindow.loadingLabel.setPixmap(canvas)
+        dead = []
+        for label in robustMainWindow.spinnerExtraLabels:
+            try:
+                label.setPixmap(canvas)
+            except RuntimeError:
+                dead.append(label)
+        for label in dead:
+            robustMainWindow.spinnerExtraLabels.discard(label)
 
     robustMainWindow.spinnerAnimation.valueChanged.connect(rotate)
 
+    def ensureAnimationRunning():
+        if robustMainWindow.spinnerAnimation.state() != QVariantAnimation.Running:
+            robustMainWindow.spinnerAnimation.start()
+
+    def maybeStopAnimation():
+        if not robustMainWindow.spinnerMainActive and not robustMainWindow.spinnerExtraLabels:
+            robustMainWindow.spinnerAnimation.stop()
+
     def startSpinner():
+        robustMainWindow.spinnerMainActive = True
         robustMainWindow.loadingLabel.setFixedSize(canvasSize, canvasSize)
         robustMainWindow.loadingLabel.setAlignment(Qt.AlignCenter)
         robustMainWindow.loadingLabel.show()
-        robustMainWindow.spinnerAnimation.start()
+        ensureAnimationRunning()
 
     def stopSpinner():
-        robustMainWindow.spinnerAnimation.stop()
+        robustMainWindow.spinnerMainActive = False
         robustMainWindow.loadingLabel.hide()
+        maybeStopAnimation()
+
+    def addSpinnerLabel(label):
+        label.setFixedSize(canvasSize, canvasSize)
+        label.setAlignment(Qt.AlignCenter)
+        robustMainWindow.spinnerExtraLabels.add(label)
+        ensureAnimationRunning()
+
+    def removeSpinnerLabel(label):
+        robustMainWindow.spinnerExtraLabels.discard(label)
+        maybeStopAnimation()
 
     robustMainWindow.startSpinner = startSpinner
     robustMainWindow.stopSpinner = stopSpinner
+    robustMainWindow.addSpinnerLabel = addSpinnerLabel
+    robustMainWindow.removeSpinnerLabel = removeSpinnerLabel

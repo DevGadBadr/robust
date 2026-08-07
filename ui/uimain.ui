@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>830</width>
+    <width>720</width>
     <height>622</height>
    </rect>
   </property>
@@ -383,8 +383,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>635</width>
-               <height>78</height>
+               <width>557</width>
+               <height>68</height>
               </rect>
              </property>
              <layout class="QVBoxLayout" name="scrollAreaLayout">
@@ -432,9 +432,12 @@
                      <property name="orientation">
                       <enum>Qt::Horizontal</enum>
                      </property>
+                     <property name="sizeType">
+                      <enum>QSizePolicy::Fixed</enum>
+                     </property>
                      <property name="sizeHint" stdset="0">
                       <size>
-                       <width>40</width>
+                       <width>20</width>
                        <height>20</height>
                       </size>
                      </property>
@@ -444,7 +447,7 @@
                     <widget class="QWidget" name="widget" native="true">
                      <property name="minimumSize">
                       <size>
-                       <width>150</width>
+                       <width>200</width>
                        <height>0</height>
                       </size>
                      </property>
@@ -825,8 +828,8 @@
                   <property name="geometry">
                    <rect>
                     <x>0</x>
-                    <y>-25</y>
-                    <width>596</width>
+                    <y>0</y>
+                    <width>549</width>
                     <height>86</height>
                    </rect>
                   </property>
@@ -1160,7 +1163,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>830</width>
+     <width>720</width>
      <height>18</height>
     </rect>
    </property>
