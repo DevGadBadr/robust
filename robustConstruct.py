@@ -216,7 +216,7 @@ class RobustConstruct(Ui_RobustMain):
         if preserveProgress and previous is not None:
             scrapeJobClass.executePosition = min(getattr(previous, 'executePosition', 0), len(actions))
             scrapeJobClass.firstExecuted = getattr(previous, 'firstExecuted', False)
-            scrapeJobClass.lastExecuted = getattr(previous, 'lastExecuted', False) and scrapeJobClass.executePosition >= len(actions)
+            scrapeJobClass.lastExecuted = scrapeJobClass.executePosition >= len(actions)
         driver['scrapeJobClass'] = scrapeJobClass
         driver['scrapeJobName'] = jobsFor
         return scrapeJobClass

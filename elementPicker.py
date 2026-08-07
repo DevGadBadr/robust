@@ -114,7 +114,7 @@ def _walkFrames(driver, visit, framePath=(), frameChain=(), depth=0):
                 driver.switch_to.parent_frame()
             except WebDriverException:
                 if not _enterPath(driver, framePath):
-                    return
+                    print("Failed to re-enter frame path", framePath, "after leaving a child frame")
 
 
 def _registerPersistent(driver, jobuuid):

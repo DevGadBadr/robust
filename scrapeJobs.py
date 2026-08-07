@@ -51,6 +51,15 @@ class abstractScrapeJob:
     def initiateActions(self, actions):
         self.actions = actions
 
+    def _clampExecuteCursor(self):
+        """Keep executePosition in [0, len(actions)] and sync lastExecuted."""
+        n = len(getattr(self, "actions", []) or [])
+        if self.executePosition < 0:
+            self.executePosition = 0
+        elif self.executePosition > n:
+            self.executePosition = n
+        self.lastExecuted = n == 0 or self.executePosition >= n
+
     def saveJobIfNotExist(self, job, owner):
         with open("./resources/jobs.json","r") as f:
             jobsFile = json.load(f)
@@ -67,6 +76,7 @@ class abstractScrapeJob:
                     continue
                 if all(existingJob[1].get(name) == job[1].get(name) for name in fields):
                     self.actions.pop()
+                    self._clampExecuteCursor()
                     return "Job Exists"
                 # Find Related Action
                 existAction = None
@@ -97,6 +107,7 @@ class abstractScrapeJob:
             json.dump({"jobs": jobsDict} , f)
         if updateFlag:
             self.actions.pop()
+            self._clampExecuteCursor()
             return "Job Updated"
         return "Job Saved"
 
@@ -109,6 +120,7 @@ class abstractScrapeJob:
                 if actionIndex < self.executePosition:
                     self.executePosition-=1
                 break
+        self._clampExecuteCursor()
         with open("./resources/jobs.json","r") as f:
             jobsFile = json.load(f)
         jobsDict:dict =jobsFile['jobs']
@@ -129,7 +141,10 @@ class abstractScrapeJob:
         context = kwargs.get("context")
         position = len(self.actions)
         self.actions.append((function, buildKwargs(fields, uuid, jobtype, position, context)))
-        self.lastExecuted = False
+        self._clampExecuteCursor()
+        # New action is runnable work; clear finished even if cursor was parked at end.
+        if len(self.actions) > 0:
+            self.lastExecuted = False
         return self.saveJobIfNotExist((jobtype, buildKwargs(fields, uuid, jobtype, position, context)), owner)
 
     def addGetUrlJob(self, **kwargs):
@@ -161,55 +176,42 @@ class abstractScrapeJob:
         }, **kwargs)
 
     def executeNextAction(self):
-        actionsLength = len(self.actions)
-        if actionsLength == 1:
-            if not self.lastExecuted:
-                function, kwargs = self.actions[0]
-                kwargs['direction'] = "forward"
-                result = function(self.driver, **kwargs)
-                self.lastExecuted = True
-                self.firstExecuted = True
-                return result
-        if actionsLength > 1:
-            if self.executePosition+1 == actionsLength or self.executePosition == actionsLength:
-                if not self.lastExecuted:
-                    function, kwargs = self.actions[self.executePosition]
-                    kwargs['direction'] = "forward"
-                    result = function(self.driver, **kwargs)
-                    self.lastExecuted = True
-                    self.executePosition = len(self.actions)
-                    print(self.executePosition, actionsLength, self.lastExecuted, "last")
-                    return result
-                self.executePosition = len(self.actions)
-                return "End of actions", "end", "forward", None
-            function, kwargs = self.actions[self.executePosition]
-            kwargs['direction'] = "forward"
-            result = function(self.driver, **kwargs)
-            self.executePosition += 1
-            self.firstExecuted = False
-            print(self.executePosition, actionsLength, self.lastExecuted, "next")
-            return result
+        self._clampExecuteCursor()
+        n = len(self.actions)
+        if self.executePosition >= n:
+            self.lastExecuted = True
+            return "End of actions", "end", "forward", None
+        function, kwargs = self.actions[self.executePosition]
+        kwargs["direction"] = "forward"
+        result = function(self.driver, **kwargs)
+        self.executePosition += 1
+        self.firstExecuted = False
+        self.lastExecuted = self.executePosition >= n
+        return result
 
     def executePreviousAction(self):
-        actionsLength = len(self.actions)
-        if actionsLength == 1:
+        self._clampExecuteCursor()
+        n = len(self.actions)
+        if n == 0:
+            return "Previous Done", "back", "backward", None
+        # Single-step jobs unwind via browser history, matching prior behavior.
+        if n == 1:
             self.driver.back()
+            self.executePosition = 0
             self.lastExecuted = False
             return "Previous Done", "back", "backward", None
-        if actionsLength > 1:
-            if self.executePosition == 0:
-                if not self.firstExecuted:
-                    function, kwargs = self.actions[self.executePosition]
-                    kwargs['direction'] = "backward"
-                    result = function(self.driver, **kwargs)
-                    self.firstExecuted = True
-                    return result
-                else:
-                    self.driver.back()
-                    return "Previous Done", "back", "backward", None
-            function, kwargs = self.actions[self.executePosition-1]
-            kwargs['direction'] = "backward"
-            result = function(self.driver, **kwargs)
-            self.executePosition -= 1
-            self.lastExecuted = False
-            return result
+        if self.executePosition == 0:
+            if not self.firstExecuted:
+                function, kwargs = self.actions[0]
+                kwargs["direction"] = "backward"
+                result = function(self.driver, **kwargs)
+                self.firstExecuted = True
+                return result
+            self.driver.back()
+            return "Previous Done", "back", "backward", None
+        function, kwargs = self.actions[self.executePosition - 1]
+        kwargs["direction"] = "backward"
+        result = function(self.driver, **kwargs)
+        self.executePosition -= 1
+        self.lastExecuted = False
+        return result
