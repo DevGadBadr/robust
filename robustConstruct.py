@@ -1,7 +1,7 @@
 import json
 from PyQt5 import QtWidgets
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QApplication, QDialog, QGraphicsOpacityEffect
+from PyQt5.QtWidgets import QApplication, QDialog,QMainWindow, QGraphicsOpacityEffect
 from scrapeJobsHelpers import clickButtonJob, getUrlJob, inputFieldJob, extractTextJob, extractLinksJob
 from ui.uimain import Ui_RobustMain
 from newJobConstruct import NewJobConstruct
@@ -10,11 +10,11 @@ from PyQt5.QtCore import QTimer, Qt
 from workerThread import QWorker
 from collections import deque
 from scrapeJobs import abstractScrapeJob
-from elementSetup import setUpSplitters
+from elementSetup import setUpSplitters, setupSpinner
 import win32gui
 import win32con
 from chromeEmbed import embedChrome, resizeChrome, detachChrome
-from ui.manageTheme import DarkPalette, LightPalette, enableLightTitlebar, isWindowsDarkMode, enableDarkTitlebar
+from ui.manageTheme import DarkPalette, LightPalette, isWindowsDarkMode, applyTitlebarToTopLevels
 
 
 class DriverHostWidget(QtWidgets.QWidget):
@@ -42,12 +42,12 @@ class RobustConstruct(Ui_RobustMain):
         self.uiUpdateTimer.setInterval(50)
         self.uiUpdateTimer.timeout.connect(self.processNextUiUpdate)
 
-    def setupUi(self, RobustDialog:QDialog):
-        super().setupUi(RobustDialog)
-        self.mainWindow = RobustDialog
-        RobustDialog.setWindowFlags(RobustDialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-        RobustDialog.setWindowFlags(RobustDialog.windowFlags() | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint)
-        RobustDialog.closeEvent = self.closeEvent
+    def setupUi(self, RobustMainWindow:QMainWindow):
+        super().setupUi(RobustMainWindow)
+        self.mainWindow = RobustMainWindow
+        RobustMainWindow.setWindowFlags(RobustMainWindow.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        RobustMainWindow.setWindowFlags(RobustMainWindow.windowFlags() | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint)
+        RobustMainWindow.closeEvent = self.closeEvent
         self.intitializing = True
         self.driverInstancePlaceHolder.deleteLater()
         self.initiateVariables()
@@ -58,6 +58,7 @@ class RobustConstruct(Ui_RobustMain):
         self.loadSettings()
         self.modifyMainDefaultBox()
         setUpSplitters(self)
+        setupSpinner(self)
         self.intitializing = False
         self.startButton.click()
 
@@ -232,7 +233,7 @@ class RobustConstruct(Ui_RobustMain):
 
     def refreshSiblingDrivers(self, jobsFor, exceptUuid=None):
         """Drivers sharing a scrape job hold separate action lists, so re-read them from file."""
-        # Snapshot: driver threads can insert into the drivers dict at any time.
+        # Snapshot: driver threads can insert into the drivers dict at any time. 
         for uuid, driver in list(self.worker.driverManager.drivers.items()):
             if driver.get('dropped') or uuid == exceptUuid:
                 continue
@@ -268,14 +269,14 @@ class RobustConstruct(Ui_RobustMain):
 
     def applyDarkTheme(self, persist=True):
         QApplication.setPalette(DarkPalette)
-        enableDarkTitlebar(int(self.mainWindow.winId()))
+        applyTitlebarToTopLevels(True)
         self.refreshThemedWidgets()
         if persist:
             self.saveTheme("dark")
 
     def applyLightTheme(self, persist=True):
         QApplication.setPalette(LightPalette)
-        enableLightTitlebar(int(self.mainWindow.winId()))
+        applyTitlebarToTopLevels(False)
         self.refreshThemedWidgets()
         if persist:
             self.saveTheme("light")
@@ -339,6 +340,7 @@ class RobustConstruct(Ui_RobustMain):
         self.startButton.setDisabled(True)
         self.closeAllButton.setDisabled(True)
         self.executeAllButton.setDisabled(True)
+        self.startSpinner()
         self.worker.run(self.numberOfDrivers, self.headlessCheckbox.isChecked(), self.hiddenCheckBox.isChecked())
         currentInstances = len([driver for driver in self.worker.driverManager.drivers.values() if not driver['dropped']])
         self.nextDriverCount = currentInstances + 1
@@ -442,6 +444,12 @@ class RobustConstruct(Ui_RobustMain):
             if screenshot:
                 self.postToUI("updateScreenshot", {"uuid": event['uuid'], "screenshot": screenshot})
 
+
+        if event['type'] == "driverCreationFailed":
+            self.postToUI("status", {"msg": "Driver Creation Failed: " + event.get("error", "Unknown Error")})
+            self.worker.driverManager.drivers[event['uuid']]['dropped'] = True
+            self.updateCounter()
+
         if event['type'] == "elementPicked":
             self.postToUI("elementPicked", event)
 
@@ -452,6 +460,7 @@ class RobustConstruct(Ui_RobustMain):
         self.startButton.setDisabled(False)
         self.closeAllButton.setDisabled(False)
         self.executeAllButton.setDisabled(False)
+        self.stopSpinner()
         
     def closeDriverInstance(self, uuid):
         driver = self.worker.driverManager.drivers[uuid]
@@ -663,7 +672,7 @@ class RobustConstruct(Ui_RobustMain):
         instanceLayout.setSpacing(5)
         instanceLayout.setObjectName("instanceLayout"+str(uuid))
         driverCount = QtWidgets.QLabel(driverInstance)
-        driverCount.setMaximumSize(QtCore.QSize(15, 16777215))
+        driverCount.setMaximumSize(QtCore.QSize(20, 16777215))
         driverCount.setObjectName("driverCount"+str(uuid))
         driverCount.setText(str(self.nextDriverCount))
         instanceLayout.addWidget(driverCount)
@@ -686,7 +695,7 @@ class RobustConstruct(Ui_RobustMain):
         driverDefaultUrl.setObjectName("driverDefaultUrl"+str(uuid))
         for job in self.existJobs:
             driverDefaultUrl.addItem(job)
-        def handleDriverScrapeJobChange(text):
+        def handleDriverScrapeJobChange():
             self.handleDriverScrapeJobSelected(uuid, driverDefaultUrl.currentText())
         def controlButtonHandle():
             self.selectDriver(uuid)

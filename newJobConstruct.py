@@ -1,4 +1,5 @@
 from ui.uinewjob import Ui_NewJobDialog
+from ui.manageTheme import applyTitlebarToWidget
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtCore import Qt
 import json
@@ -16,6 +17,7 @@ class NewJobConstruct(Ui_NewJobDialog):
         NewJobDialog.setWindowFlags(NewJobDialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         NewJobDialog.setWindowFlags(NewJobDialog.windowFlags() | Qt.WindowMinimizeButtonHint)
         NewJobDialog.setWindowTitle(f"Add New Job")
+        applyTitlebarToWidget(NewJobDialog)
         self.dialog = NewJobDialog
         self.initialConfigs()
         self.initiateVariables()

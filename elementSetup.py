@@ -1,5 +1,6 @@
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import QTimer, QVariantAnimation, Qt
 from PyQt5 import QtWidgets
+from PyQt5.QtGui import QPainter, QPixmap, QTransform
 
 
 def setUpSplitters(robustClass):
@@ -70,3 +71,46 @@ def setUpSplitters(robustClass):
     robustClass.applyVerticalSizes = applyVerticalSizes
     robustClass.applyJobsVerticalSizes = applyJobsVerticalSizes
     robustClass.applyAllSplitterSizes = applyAllSplitterSizes
+
+def setupSpinner(robustMainWindow):
+    canvasSize = 30
+
+    robustMainWindow.spinnerPixmap = QPixmap("./resources/spinner.png").scaled(
+        canvasSize, canvasSize, Qt.KeepAspectRatio, Qt.SmoothTransformation
+    )
+
+    robustMainWindow.spinnerAnimation = QVariantAnimation()
+    robustMainWindow.spinnerAnimation.setStartValue(0.0)
+    robustMainWindow.spinnerAnimation.setEndValue(360.0)
+    robustMainWindow.spinnerAnimation.setDuration(1000)  # 1 sec per rotation
+    robustMainWindow.spinnerAnimation.setLoopCount(-1)   # infinite
+
+    def rotate(angle):
+        canvas = QPixmap(canvasSize, canvasSize)
+        canvas.fill(Qt.transparent)
+
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.translate(canvasSize / 2, canvasSize / 2)
+        painter.rotate(angle)
+        painter.translate(-robustMainWindow.spinnerPixmap.width() / 2,
+                           -robustMainWindow.spinnerPixmap.height() / 2)
+        painter.drawPixmap(0, 0, robustMainWindow.spinnerPixmap)
+        painter.end()
+
+        robustMainWindow.loadingLabel.setPixmap(canvas)
+
+    robustMainWindow.spinnerAnimation.valueChanged.connect(rotate)
+
+    def startSpinner():
+        robustMainWindow.loadingLabel.setFixedSize(canvasSize, canvasSize)
+        robustMainWindow.loadingLabel.setAlignment(Qt.AlignCenter)
+        robustMainWindow.loadingLabel.show()
+        robustMainWindow.spinnerAnimation.start()
+
+    def stopSpinner():
+        robustMainWindow.spinnerAnimation.stop()
+        robustMainWindow.loadingLabel.hide()
+
+    robustMainWindow.startSpinner = startSpinner
+    robustMainWindow.stopSpinner = stopSpinner

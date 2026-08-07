@@ -1,5 +1,6 @@
 import html
 from ui.uijobContent import Ui_jobContentDialog
+from ui.manageTheme import applyTitlebarToWidget
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 
@@ -14,6 +15,7 @@ class JobArtifactConstruct(Ui_jobContentDialog):
         jobContentDialog.setWindowFlags(jobContentDialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         jobContentDialog.setWindowFlags(jobContentDialog.windowFlags() | Qt.WindowMinimizeButtonHint)
         jobContentDialog.setWindowTitle("Content")
+        applyTitlebarToWidget(jobContentDialog)
         self.dialog = jobContentDialog
         self.textBrowser.setOpenExternalLinks(True)
         if self.content:

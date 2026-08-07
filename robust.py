@@ -1,14 +1,14 @@
 from robustConstruct import RobustConstruct
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QDialog, QMainWindow
+from PyQt5.QtWidgets import QApplication, QMainWindow
 import sys
 
 # This is the entry point for the application
 
 class RobustMain(RobustConstruct):
 
-    def setupUi(self, dialog:QDialog):
-        super().setupUi(dialog)
+    def setupUi(self, mainWindow:QMainWindow):
+        super().setupUi(mainWindow)
 
 if __name__ == "__main__":
     if not 'fusion' in sys.argv:

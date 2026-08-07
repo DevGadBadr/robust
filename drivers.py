@@ -5,6 +5,7 @@ from collections import deque
 import queue
 from uuid import uuid4
 import psutil
+from selenium.common import SessionNotCreatedException
 import win32gui
 import win32process
 import win32con
@@ -32,7 +33,11 @@ class DriverManager(QObject):
         options = webdriver.ChromeOptions()
         if isHeadless:
             options.add_argument("--headless")
-        driver = webdriver.Chrome(options=options)
+        try:
+            driver = webdriver.Chrome(options=options)
+        except SessionNotCreatedException:
+            self.status.emit({"type": "driverCreationFailed", "uuid": driverUUID, "error": "Session not created"})
+            return
         driverpid = driver.service.process.pid
         chromePid = self.getChromeWindowPid(driverpid)
         hwnd = self.findHWND(chromePid) if chromePid and not isHeadless else None

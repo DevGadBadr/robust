@@ -28,7 +28,7 @@ def embedChrome(hwnd, hostWidget):
     if not hwnd or hostWidget is None:
         return False
     try:
-        hostWidget.setAttribute(Qt.WA_NativeWindow, True)
+        hostWidget.setAttribute(Qt.WA_NativeWindow, True) 
         host_hwnd = int(hostWidget.winId())
         style = _get_style(hwnd)
         if hostWidget.property("_chromeOrigStyle") is None:

@@ -1,5 +1,6 @@
 from PyQt5.QtGui import QPalette, QColor
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QApplication
 import winreg
 import ctypes
 
@@ -55,3 +56,33 @@ def enableLightTitlebar(hwnd):
     DWMWA_USE_IMMERSIVE_DARK_MODE = 20
     value = ctypes.c_int(0)
     ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ctypes.byref(value), ctypes.sizeof(value))
+
+
+def isDarkThemeActive():
+    app = QApplication.instance()
+    if app is None:
+        return False
+    return app.palette().color(QPalette.Window).lightness() < 128
+
+
+def applyTitlebarToWidget(widget, dark=None):
+    if widget is None:
+        return
+    if dark is None:
+        dark = isDarkThemeActive()
+    hwnd = int(widget.winId())
+    if dark:
+        enableDarkTitlebar(hwnd)
+    else:
+        enableLightTitlebar(hwnd)
+
+
+def applyTitlebarToTopLevels(dark=None):
+    if dark is None:
+        dark = isDarkThemeActive()
+    app = QApplication.instance()
+    if app is None:
+        return
+    for widget in app.topLevelWidgets():
+        if widget.isWindow():
+            applyTitlebarToWidget(widget, dark)

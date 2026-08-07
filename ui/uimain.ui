@@ -318,6 +318,25 @@
            </spacer>
           </item>
           <item>
+           <widget class="QLabel" name="loadingLabel">
+            <property name="maximumSize">
+             <size>
+              <width>30</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="pixmap">
+             <pixmap>../resources/spinner.png</pixmap>
+            </property>
+            <property name="scaledContents">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QPushButton" name="startButton">
             <property name="minimumSize">
              <size>
@@ -364,8 +383,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>860</width>
-               <height>109</height>
+               <width>862</width>
+               <height>127</height>
               </rect>
              </property>
              <layout class="QVBoxLayout" name="scrollAreaLayout">
@@ -397,6 +416,12 @@
                    </property>
                    <item>
                     <widget class="QLabel" name="driverName">
+                     <property name="minimumSize">
+                      <size>
+                       <width>0</width>
+                       <height>0</height>
+                      </size>
+                     </property>
                      <property name="text">
                       <string>Driver 1</string>
                      </property>
@@ -672,8 +697,8 @@
                    <rect>
                     <x>0</x>
                     <y>0</y>
-                    <width>814</width>
-                    <height>111</height>
+                    <width>836</width>
+                    <height>154</height>
                    </rect>
                   </property>
                   <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -1007,7 +1032,7 @@
      <x>0</x>
      <y>0</y>
      <width>1128</width>
-     <height>26</height>
+     <height>18</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuRobust">
