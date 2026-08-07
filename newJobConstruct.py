@@ -66,6 +66,11 @@ class NewJobConstruct(Ui_NewJobDialog):
             self.setStatus(f"Job {newItemText} already exists. Please choose a different name.")
             return
         self.existingJobs['jobs'][newItemText] = self.existingJobs['jobs'].pop(self.selectedJobName)
+        delays = self.existingJobs.setdefault('delays', {})
+        if self.selectedJobName in delays:
+            delays[newItemText] = delays.pop(self.selectedJobName)
+        else:
+            delays[newItemText] = 1
         with open("./resources/jobs.json", "w") as f:
             json.dump(self.existingJobs, f)
         mainBoxItemIndex = self.robustClass.mainDefaultBox.findText(self.selectedJobName)
@@ -92,6 +97,7 @@ class NewJobConstruct(Ui_NewJobDialog):
             self.setStatus(f"Cannot remove {self.selectedJobName} because it has {len(scrapeJobActions)} jobs")
             return
         del self.existingJobs['jobs'][self.selectedJobName]
+        self.existingJobs.setdefault('delays', {}).pop(self.selectedJobName, None)
         with open("./resources/jobs.json", "w") as f:
             json.dump(self.existingJobs, f)
         for i in range(self.robustClass.mainDefaultBox.count()):
@@ -157,6 +163,7 @@ class NewJobConstruct(Ui_NewJobDialog):
         with open("./resources/jobs.json", "r") as f:
             jobsData = json.load(f)
         jobsData['jobs'][jobName] = initialjobs
+        jobsData.setdefault('delays', {})[jobName] = 1
         with open("./resources/jobs.json", "w") as f:
             json.dump(jobsData, f)
         self.setStatus("Job saved successfully!")
@@ -166,6 +173,7 @@ class NewJobConstruct(Ui_NewJobDialog):
         self.existJobsList.addItem(item)
         self.existJobsList.blockSignals(False)
         self.existingJobs['jobs'][jobName] = initialjobs
+        self.existingJobs.setdefault('delays', {})[jobName] = 1
         self.isAddingNewJob = False
         self.robustClass.mainDefaultBox.addItem(jobName)
         driverInstancesComboBoxes = [self.robustClass.instancesContainerLayout.itemAt(i).widget().findChild(QtWidgets.QComboBox) for i in range(self.robustClass.instancesContainerLayout.count())]

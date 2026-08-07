@@ -104,7 +104,7 @@ class abstractScrapeJob:
             jobs = [job]
             jobsDict[owner] = jobs
         with open("./resources/jobs.json",'w') as f:
-            json.dump({"jobs": jobsDict} , f)
+            json.dump(jobsFile, f)
         if updateFlag:
             self.actions.pop()
             self._clampExecuteCursor()
@@ -133,7 +133,7 @@ class abstractScrapeJob:
                     break
             jobsDict[owner] = jobs
             with open("./resources/jobs.json","w") as f:
-                json.dump({"jobs": jobsDict} , f)
+                json.dump(jobsFile, f)
 
     def addJob(self, function, jobtype, fields, **kwargs):
         owner = kwargs.get("owner")

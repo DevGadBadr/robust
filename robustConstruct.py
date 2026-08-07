@@ -196,6 +196,57 @@ class RobustConstruct(Ui_RobustMain):
         comboBox = self.scrollAreaWidgetContents.findChild(QtWidgets.QComboBox, "driverDefaultUrl" + str(uuid))
         return comboBox.currentText() if comboBox is not None else ""
 
+    @staticmethod
+    def formatJobDelay(delay):
+        delay = float(delay)
+        if delay == int(delay):
+            return str(int(delay))
+        return str(delay)
+
+    @staticmethod
+    def delayToSliderTick(delay):
+        tick = int(round(float(delay) * 2))
+        return max(1, min(20, tick))
+
+    @staticmethod
+    def sliderTickToDelay(tick):
+        return tick / 2.0
+
+    def getJobDelay(self, jobName):
+        with open("./resources/jobs.json", "r") as f:
+            jobsFile = json.load(f)
+        return float(jobsFile.get("delays", {}).get(jobName, 1))
+
+    def setJobDelay(self, jobName, delay):
+        with open("./resources/jobs.json", "r") as f:
+            jobsFile = json.load(f)
+        delays = jobsFile.setdefault("delays", {})
+        delays[jobName] = float(delay)
+        with open("./resources/jobs.json", "w") as f:
+            json.dump(jobsFile, f)
+        self.syncJobDelaySliders(jobName)
+
+    def applyJobDelayToRow(self, uuid, jobName=None):
+        if not jobName:
+            jobName = self.getDriverScrapeJobName(uuid)
+        slider = self.scrollAreaWidgetContents.findChild(QtWidgets.QSlider, "delayTimeSlider" + str(uuid))
+        label = self.scrollAreaWidgetContents.findChild(QtWidgets.QLabel, "delayTime" + str(uuid))
+        if slider is None or label is None or not jobName:
+            return
+        tick = self.delayToSliderTick(self.getJobDelay(jobName))
+        slider.blockSignals(True)
+        slider.setValue(tick)
+        slider.blockSignals(False)
+        label.setText(self.formatJobDelay(self.sliderTickToDelay(tick)))
+
+    def syncJobDelaySliders(self, jobName):
+        for uuid, driver in list(self.worker.driverManager.drivers.items()):
+            if driver.get('dropped'):
+                continue
+            if self.getDriverScrapeJobName(uuid) != jobName:
+                continue
+            self.applyJobDelayToRow(uuid, jobName)
+
     def applyScrapeJobToDriver(self, uuid, jobsFor, preserveProgress=False):
         driver = self.worker.driverManager.drivers.get(uuid)
         if not driver or driver.get('dropped'):
@@ -230,6 +281,7 @@ class RobustConstruct(Ui_RobustMain):
         if jobsArea is not None:
             jobsArea.setScrapeJob(jobsFor)
         self.selectDriver(uuid)
+        self.applyJobDelayToRow(uuid, jobsFor)
 
     def refreshSiblingDrivers(self, jobsFor, exceptUuid=None):
         """Drivers sharing a scrape job hold separate action lists, so re-read them from file."""
@@ -263,6 +315,7 @@ class RobustConstruct(Ui_RobustMain):
                 continue
             replacement = self.getDriverScrapeJobName(uuid)
             self.applyScrapeJobToDriver(uuid, replacement)
+            self.applyJobDelayToRow(uuid, replacement)
             jobsArea = driver.get('settingsWindowClass')
             if jobsArea is not None:
                 jobsArea.setScrapeJob(replacement)
@@ -693,6 +746,55 @@ class RobustConstruct(Ui_RobustMain):
 
         driverName.mousePressEvent = driverNamePressed
         instanceLayout.addWidget(driverName)
+        executeDelayWidget = QtWidgets.QWidget(driverInstance)
+        executeDelayWidget.setMinimumSize(QtCore.QSize(200, 0))
+        executeDelayWidget.setObjectName("executeDelayWidget"+str(uuid))
+        executeDelayLayout = QtWidgets.QHBoxLayout(executeDelayWidget)
+        executeDelayLayout.setContentsMargins(0, 0, 0, 0)
+        executeDelayLayout.setSpacing(10)
+        executeDelayLayout.setObjectName("executeDelayLayout"+str(uuid))
+        executeButton = QtWidgets.QPushButton(executeDelayWidget)
+        executeButton.setMinimumSize(QtCore.QSize(0, 30))
+        executeButton.setMaximumSize(QtCore.QSize(100, 30))
+        executeButton.setObjectName("executeButton"+str(uuid))
+        executeButton.setText("Execute")
+        executeDelayLayout.addWidget(executeButton)
+        delayTimeSlider = QtWidgets.QSlider(executeDelayWidget)
+        delayTimeSlider.setMinimum(1)
+        delayTimeSlider.setMaximum(20)
+        delayTimeSlider.setValue(2)
+        delayTimeSlider.setTracking(True)
+        delayTimeSlider.setOrientation(Qt.Horizontal)
+        delayTimeSlider.setObjectName("delayTimeSlider"+str(uuid))
+        delayTimeSlider.setVisible(False)
+        executeDelayLayout.addWidget(delayTimeSlider)
+        delayTime = QtWidgets.QLabel(executeDelayWidget)
+        delayTime.setMinimumSize(QtCore.QSize(30, 0))
+        delayFont = QtGui.QFont()
+        delayFont.setPointSize(8)
+        delayFont.setBold(True)
+        delayFont.setWeight(75)
+        delayTime.setFont(delayFont)
+        delayTime.setLayoutDirection(Qt.RightToLeft)
+        delayTime.setAlignment(Qt.AlignCenter)
+        delayTime.setObjectName("delayTime"+str(uuid))
+        delayTime.setText(self.formatJobDelay(self.sliderTickToDelay(delayTimeSlider.value())))
+        delayTime.setVisible(False)
+        executeDelayLayout.addWidget(delayTime)
+        saveDelayButton = QtWidgets.QPushButton(executeDelayWidget)
+        saveDelayButton.setMinimumSize(QtCore.QSize(0, 30))
+        saveDelayButton.setObjectName("saveDelayButton"+str(uuid))
+        saveDelayButton.setText("Save")
+        saveDelayButton.setVisible(False)
+        executeDelayLayout.addWidget(saveDelayButton)
+        def delayTimeSliderHandle(value):
+            delayTime.setText(self.formatJobDelay(self.sliderTickToDelay(value)))
+        delayTimeSlider.valueChanged.connect(delayTimeSliderHandle)
+        spacerBeforeExecute = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        instanceLayout.addItem(spacerBeforeExecute)
+        instanceLayout.addWidget(executeDelayWidget)
+        spacerAfterExecute = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        instanceLayout.addItem(spacerAfterExecute)
         driverDefaultUrl = QtWidgets.QComboBox(driverInstance)
         driverDefaultUrl.setMaximumSize(QtCore.QSize(150, 30))
         driverDefaultUrl.setObjectName("driverDefaultUrl"+str(uuid))
@@ -701,7 +803,15 @@ class RobustConstruct(Ui_RobustMain):
         def handleDriverScrapeJobChange():
             self.handleDriverScrapeJobSelected(uuid, driverDefaultUrl.currentText())
         def controlButtonHandle():
-            self.selectDriver(uuid)
+            visible = not delayTimeSlider.isVisible()
+            delayTimeSlider.setVisible(visible)
+            delayTime.setVisible(visible)
+            saveDelayButton.setVisible(visible)
+        def saveDelayHandle():
+            jobName = driverDefaultUrl.currentText()
+            if not jobName:
+                return
+            self.setJobDelay(jobName, self.sliderTickToDelay(delayTimeSlider.value()))
         def nextButtonHandle():
             self.selectDriver(uuid)
             executeClass = self.worker.driverManager.drivers[uuid].get('scrapeJobClass')
@@ -722,6 +832,7 @@ class RobustConstruct(Ui_RobustMain):
                 self.postToUI("popOutDriver", {"uuid": uuid})
             else:
                 self.postToUI("reEmbedDriver", {"uuid": uuid})
+        saveDelayButton.clicked.connect(saveDelayHandle)
         driverDefaultUrl.currentTextChanged.connect(handleDriverScrapeJobChange)
         # Seeding the default must not count as a user selection, or creating a driver
         # would steal the jobs area and the visible tab.
@@ -730,6 +841,11 @@ class RobustConstruct(Ui_RobustMain):
         driverDefaultUrl.blockSignals(False)
         if driverDefaultUrl.currentText() != self.worker.driverManager.drivers[uuid].get('scrapeJobName'):
             self.applyScrapeJobToDriver(uuid, driverDefaultUrl.currentText())
+        tick = self.delayToSliderTick(self.getJobDelay(driverDefaultUrl.currentText()))
+        delayTimeSlider.blockSignals(True)
+        delayTimeSlider.setValue(tick)
+        delayTimeSlider.blockSignals(False)
+        delayTime.setText(self.formatJobDelay(self.sliderTickToDelay(tick)))
         instanceLayout.addWidget(driverDefaultUrl)
         spacerItem4 = QtWidgets.QSpacerItem(10, 20, QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Minimum)
         instanceLayout.addItem(spacerItem4)

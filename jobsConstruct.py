@@ -205,7 +205,7 @@ class JobsConstruct(Ui_JobsDialog):
                     job[1]['position'] = self.currentActions.index(action)
                     break
         with open("./resources/jobs.json",'w') as f:
-            json.dump({"jobs": jobsDict} , f)
+            json.dump(jobsFile, f)
         jobsWidgets = [self.jobsContainerLayout.itemAt(i).widget() for i in range(self.jobsContainerLayout.count())]
         for index,jobWidget in enumerate(jobsWidgets):
             jobName = jobWidget.findChild(QtWidgets.QLabel)

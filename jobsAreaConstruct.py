@@ -572,7 +572,7 @@ class JobsAreaConstruct:
                     job[1]['position'] = self.currentActions.index(action)
                     break
         with open("./resources/jobs.json", 'w') as f:
-            json.dump({"jobs": jobsDict}, f)
+            json.dump(jobsFile, f)
         self.syncJobRowWidgetsFromLayout()
         for index, jobWidget in enumerate(self.jobRowWidgets):
             jobName = jobWidget.findChild(QtWidgets.QLabel)
