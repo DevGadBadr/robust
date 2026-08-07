@@ -184,6 +184,8 @@ class abstractScrapeJob:
         function, kwargs = self.actions[self.executePosition]
         kwargs["direction"] = "forward"
         result = function(self.driver, **kwargs)
+        if "Error" in str(result[0]):
+            return result
         self.executePosition += 1
         self.firstExecuted = False
         self.lastExecuted = self.executePosition >= n

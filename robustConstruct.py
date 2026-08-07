@@ -429,6 +429,7 @@ class RobustConstruct(Ui_RobustMain):
 
         if event['type'] == "driverDied":
             uuid = event['uuid']
+            self.stopDriverAutoExecute(uuid)
             driverNumber = self.worker.driverManager.drivers[uuid]['number']
             self.postToUI("status", {"msg": "Driver " + str(driverNumber) + " Died"})
             driver = self.worker.driverManager.drivers[uuid]
@@ -475,7 +476,8 @@ class RobustConstruct(Ui_RobustMain):
                     jobtype = action[1].get("jobtype")
                     is_extract = jobtype in ("ExtractText", "ExtractLinks")
                     if direction == "forward":
-                        action[1]['isexecuted'] = True
+                        if "Error" not in str(result):
+                            action[1]['isexecuted'] = True
                         if is_extract and not str(result).startswith("Error:"):
                             action[1]['artifact'] = artifact
                             result = "Extracted Successfully"
@@ -496,6 +498,7 @@ class RobustConstruct(Ui_RobustMain):
             screenshot = event.get("screenshot")
             if screenshot:
                 self.postToUI("updateScreenshot", {"uuid": event['uuid'], "screenshot": screenshot})
+            self.handleDriverAutoExecuteResult(event['uuid'], result, direction)
 
 
         if event['type'] == "driverCreationFailed":
@@ -516,6 +519,7 @@ class RobustConstruct(Ui_RobustMain):
         self.stopSpinner()
         
     def closeDriverInstance(self, uuid):
+        self.stopDriverAutoExecute(uuid)
         driver = self.worker.driverManager.drivers[uuid]
         driverNumber = driver['number']
         print("Closing Driver " + str(driverNumber))
@@ -683,6 +687,92 @@ class RobustConstruct(Ui_RobustMain):
             if not driver['dropped']:
                 pass
 
+    def getDriverDelaySeconds(self, uuid):
+        slider = self.scrollAreaWidgetContents.findChild(QtWidgets.QSlider, "delayTimeSlider" + str(uuid))
+        if slider is not None:
+            return self.sliderTickToDelay(slider.value())
+        jobName = self.getDriverScrapeJobName(uuid)
+        return self.getJobDelay(jobName) if jobName else 1.0
+
+    def setExecuteButtonRunning(self, uuid, running):
+        executeButton = self.scrollAreaWidgetContents.findChild(QtWidgets.QPushButton, "executeButton" + str(uuid))
+        if executeButton is None:
+            return
+        executeButton.setText("Stop" if running else "Execute")
+
+    def ensureAutoExecuteTimer(self, uuid):
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver:
+            return None
+        timer = driver.get('autoExecuteTimer')
+        if timer is None:
+            timer = QTimer(self.mainWindow)
+            timer.setSingleShot(True)
+            timer.timeout.connect(lambda u=uuid: self.queueAutoExecuteStep(u))
+            driver['autoExecuteTimer'] = timer
+        return timer
+
+    def startDriverAutoExecute(self, uuid):
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver or driver.get('dropped') or driver.get('autoExecuting'):
+            return
+        executeClass = driver.get('scrapeJobClass')
+        if executeClass is None:
+            return
+        self.selectDriver(uuid)
+        driver['autoExecuting'] = True
+        driver['autoExecuteAwaiting'] = False
+        self.setExecuteButtonRunning(uuid, True)
+        self.queueAutoExecuteStep(uuid)
+
+    def stopDriverAutoExecute(self, uuid):
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver:
+            return
+        driver['autoExecuting'] = False
+        driver['autoExecuteAwaiting'] = False
+        timer = driver.get('autoExecuteTimer')
+        if timer is not None:
+            timer.stop()
+        self.setExecuteButtonRunning(uuid, False)
+
+    def queueAutoExecuteStep(self, uuid):
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver or driver.get('dropped') or not driver.get('autoExecuting'):
+            return
+        executeClass = driver.get('scrapeJobClass')
+        if executeClass is None or getattr(executeClass, 'lastExecuted', False):
+            self.stopDriverAutoExecute(uuid)
+            return
+        driver['autoExecuteAwaiting'] = True
+        driver['threadQueue'].put((executeClass.executeNextAction, {}))
+
+    def scheduleNextAutoExecute(self, uuid):
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver or driver.get('dropped') or not driver.get('autoExecuting'):
+            return
+        timer = self.ensureAutoExecuteTimer(uuid)
+        if timer is None:
+            return
+        delayMs = int(self.getDriverDelaySeconds(uuid) * 1000)
+        timer.start(max(delayMs, 0))
+
+    def handleDriverAutoExecuteResult(self, uuid, result, direction):
+        driver = self.worker.driverManager.drivers.get(uuid)
+        if not driver or not driver.get('autoExecuteAwaiting') or direction != "forward":
+            return
+        driver['autoExecuteAwaiting'] = False
+        if not driver.get('autoExecuting'):
+            return
+        if "Error" in str(result):
+            self.scheduleNextAutoExecute(uuid)
+            return
+        executeClass = driver.get('scrapeJobClass')
+        if result == "End of actions" or (executeClass is not None and getattr(executeClass, 'lastExecuted', False)):
+            self.stopDriverAutoExecute(uuid)
+            return
+        self.scheduleNextAutoExecute(uuid)
+
     def closeEvent(self, event):
         with open("./resources/settings.json", "r") as f:
             settings = json.load(f)
@@ -812,6 +902,11 @@ class RobustConstruct(Ui_RobustMain):
             if not jobName:
                 return
             self.setJobDelay(jobName, self.sliderTickToDelay(delayTimeSlider.value()))
+        def executeButtonHandle():
+            if self.worker.driverManager.drivers[uuid].get('autoExecuting'):
+                self.stopDriverAutoExecute(uuid)
+            else:
+                self.startDriverAutoExecute(uuid)
         def nextButtonHandle():
             self.selectDriver(uuid)
             executeClass = self.worker.driverManager.drivers[uuid].get('scrapeJobClass')
@@ -832,6 +927,7 @@ class RobustConstruct(Ui_RobustMain):
                 self.postToUI("popOutDriver", {"uuid": uuid})
             else:
                 self.postToUI("reEmbedDriver", {"uuid": uuid})
+        executeButton.clicked.connect(executeButtonHandle)
         saveDelayButton.clicked.connect(saveDelayHandle)
         driverDefaultUrl.currentTextChanged.connect(handleDriverScrapeJobChange)
         # Seeding the default must not count as a user selection, or creating a driver

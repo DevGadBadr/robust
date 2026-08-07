@@ -493,7 +493,7 @@ class JobsAreaConstruct:
         if jobWidget:
             checkBox = jobWidget.findChild(QtWidgets.QCheckBox, "doneCheckBox" + str(jobuuid))
             if checkBox:
-                if direction == "forward":
+                if direction == "forward" and "Error" not in str(result):
                     checkBox.setChecked(True)
                 elif direction == "backward":
                     checkBox.setChecked(False)
