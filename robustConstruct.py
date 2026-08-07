@@ -364,10 +364,23 @@ class RobustConstruct(Ui_RobustMain):
             with open("./resources/settings.json","w") as file:
                 json.dump(settings,file) 
 
+    def positionDialogOnDriversTab(self, dialog):
+        tab = self.driversTabWidget
+        tabW, tabH = tab.width(), tab.height()
+        dialogW, dialogH = dialog.width(), dialog.height()
+        if tabW < dialogW or tabH < dialogH:
+            return
+        topLeft = tab.mapToGlobal(QtCore.QPoint(0, 0))
+        x = topLeft.x() + (tabW - dialogW) // 2
+        y = topLeft.y() + (tabH - dialogH) // 2
+        dialog.move(x, y)
+
     def openAddJobDialog(self):
         self.addNewJobDialog = QDialog()
         self.newJobDialogClass = NewJobConstruct(self)
         self.newJobDialogClass.setupUi(self.addNewJobDialog)
+        self.addNewJobDialog.resize(650, 600)
+        self.positionDialogOnDriversTab(self.addNewJobDialog)
         self.addNewJobDialog.show()
 
     def handleHiddenCheckboxChange(self, state):

@@ -646,6 +646,7 @@ class JobsAreaConstruct:
         self.jobContentDialog = QDialog()
         self.jobContentDialogClass = JobArtifactConstruct(content)
         self.jobContentDialogClass.setupUi(self.jobContentDialog)
+        self.robustClass.positionDialogOnDriversTab(self.jobContentDialog)
         self.jobContentDialog.show()
 
     def evaluateJobsOrderChange(self):
